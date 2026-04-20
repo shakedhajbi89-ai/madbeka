@@ -1,16 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo, Geist } from "next/font/google";
+import { Heebo, Geist, Rubik_Wet_Paint } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { GoogleAnalytics } from "@/components/google-analytics";
+import { SplashScreen } from "@/components/splash-screen";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const heebo = Heebo({
   variable: "--font-heebo",
   subsets: ["hebrew", "latin"],
+  display: "swap",
+});
+
+// Display face used by the in-app splash screen — same brushy wet-paint
+// face we bake into the PWA icon, so the hand-off from the Android splash
+// to our animated splash is visually seamless.
+const rubikWetPaint = Rubik_Wet_Paint({
+  variable: "--font-rubik-wet-paint",
+  subsets: ["latin"],
+  weight: "400",
   display: "swap",
 });
 
@@ -59,9 +70,11 @@ export default function RootLayout({
           heebo.variable,
           "font-sans",
           geist.variable,
+          rubikWetPaint.variable,
         )}
       >
         <body className="min-h-full flex flex-col font-sans">
+          <SplashScreen />
           {children}
           <GoogleAnalytics />
         </body>

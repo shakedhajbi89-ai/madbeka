@@ -53,12 +53,21 @@ export function LogoImageJSX({
   paddingRatio?: number;
 }) {
   const pad = size * paddingRatio;
-
-  // Single-glyph "M" lets us size the letter huge and keeps it crisp even
-  // at 32×32 (favicon). Fills ~90% of the available tile height — the
-  // letter is the brand mark, whitespace around it is minimal.
   const availableSide = size * (1 - 2 * paddingRatio);
-  const fontSize = availableSide * 0.95;
+
+  // Vertical layout: bold "M" on top, "Madbeka" wordmark below.
+  // Proportions chosen so the M still dominates at every size (home-screen
+  // icon legibility) while the wordmark is readable on the splash screen
+  // (rendered from the 512×512 icon on Android PWA launch).
+  //
+  // height budget inside the tile:
+  //   M letter   : 0.68
+  //   gap        : 0.04
+  //   wordmark   : 0.18
+  //   slack      : 0.10  (breathing room top + bottom)
+  const mFontSize = availableSide * 0.68;
+  const wordFontSize = availableSide * 0.18;
+  const gap = availableSide * 0.04;
 
   return (
     <div
@@ -67,32 +76,43 @@ export function LogoImageJSX({
         height: size,
         background: "#ffffff",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         padding: pad,
+        gap,
       }}
     >
       <div
         style={{
           display: "flex",
           fontFamily: "Rubik Wet Paint",
-          fontSize,
+          fontSize: mFontSize,
           color: "#000000",
           lineHeight: 1,
-          // Nudge the glyph up a hair — Rubik Wet Paint's metrics leave
-          // extra descender whitespace, so without this the "M" sits low
-          // inside the tile.
-          marginTop: -fontSize * 0.04,
         }}
       >
         M
+      </div>
+      <div
+        style={{
+          display: "flex",
+          fontFamily: "Rubik Wet Paint",
+          fontSize: wordFontSize,
+          color: "#000000",
+          lineHeight: 1,
+          letterSpacing: "-0.01em",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Madbeka
       </div>
     </div>
   );
 }
 
-// Only the "M" glyph is needed for the icon, but we keep the wordmark
-// available as a constant in case we want to render full "Madbeka" text
-// elsewhere (e.g. in-app header, OG social card).
-export const LOGO_TEXT = "M";
+// Subset text passed to the Google Font endpoint — needs to cover every
+// glyph we render (M + a/d/b/e/k from "Madbeka"). Listing the full word is
+// the simplest way to guarantee the subset is complete.
+export const LOGO_TEXT = "Madbeka";
 export const FULL_WORDMARK = "Madbeka";
