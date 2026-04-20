@@ -54,16 +54,11 @@ export function LogoImageJSX({
 }) {
   const pad = size * paddingRatio;
 
-  // Rubik Wet Paint is a wide display face — each "Madbeka" glyph averages
-  // ~0.72em, so the full word is ≈ 5.0em (7 chars × 0.72). We size the font
-  // so 5.0em fits inside the available width with a small safety margin,
-  // and we account for the -3° rotation which extends the bounding box
-  // slightly along the diagonal.
-  //
-  // availableWidth = size * (1 - 2*paddingRatio)
-  // fontSize     ≈ availableWidth / 5.4   (5.0 for glyphs + 0.4 rotation slack)
-  const availableWidth = size * (1 - 2 * paddingRatio);
-  const fontSize = availableWidth / 5.4;
+  // Single-glyph "M" lets us size the letter huge and keeps it crisp even
+  // at 32×32 (favicon). Fills ~90% of the available tile height — the
+  // letter is the brand mark, whitespace around it is minimal.
+  const availableSide = size * (1 - 2 * paddingRatio);
+  const fontSize = availableSide * 0.95;
 
   return (
     <div
@@ -83,18 +78,21 @@ export function LogoImageJSX({
           fontFamily: "Rubik Wet Paint",
           fontSize,
           color: "#000000",
-          letterSpacing: "-0.01em",
-          // Subtle tilt mimics the hand-drawn reference without eating so
-          // much horizontal room that the last glyph clips.
-          transform: "rotate(-3deg)",
           lineHeight: 1,
-          whiteSpace: "nowrap",
+          // Nudge the glyph up a hair — Rubik Wet Paint's metrics leave
+          // extra descender whitespace, so without this the "M" sits low
+          // inside the tile.
+          marginTop: -fontSize * 0.04,
         }}
       >
-        Madbeka
+        M
       </div>
     </div>
   );
 }
 
-export const LOGO_TEXT = "Madbeka";
+// Only the "M" glyph is needed for the icon, but we keep the wordmark
+// available as a constant in case we want to render full "Madbeka" text
+// elsewhere (e.g. in-app header, OG social card).
+export const LOGO_TEXT = "M";
+export const FULL_WORDMARK = "Madbeka";
