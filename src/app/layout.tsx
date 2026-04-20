@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { GoogleAnalytics } from "@/components/google-analytics";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -53,7 +54,10 @@ export default function RootLayout({
           geist.variable,
         )}
       >
-        <body className="min-h-full flex flex-col font-sans">{children}</body>
+        <body className="min-h-full flex flex-col font-sans">
+          {children}
+          <GoogleAnalytics />
+        </body>
       </html>
     </ClerkProvider>
   );
