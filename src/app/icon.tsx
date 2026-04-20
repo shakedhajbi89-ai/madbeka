@@ -10,11 +10,11 @@ export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 
 export default async function Icon() {
-  const fontData = await loadGoogleFont("Rubik+Wet+Paint", LOGO_TEXT);
+  const fontData = await loadGoogleFont("Permanent+Marker", LOGO_TEXT);
   return new ImageResponse(<LogoImageJSX size={32} paddingRatio={0.05} />, {
     ...size,
     fonts: [
-      { name: "Rubik Wet Paint", data: fontData, style: "normal", weight: 400 },
+      { name: "Permanent Marker", data: fontData, style: "normal", weight: 400 },
     ],
   });
 }

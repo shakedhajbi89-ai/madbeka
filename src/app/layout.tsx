@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo, Geist, Rubik_Wet_Paint } from "next/font/google";
+import { Heebo, Geist, Permanent_Marker } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
 import "./globals.css";
@@ -15,11 +15,12 @@ const heebo = Heebo({
   display: "swap",
 });
 
-// Display face used by the in-app splash screen — same brushy wet-paint
-// face we bake into the PWA icon, so the hand-off from the Android splash
-// to our animated splash is visually seamless.
-const rubikWetPaint = Rubik_Wet_Paint({
-  variable: "--font-rubik-wet-paint",
+// Display face used by the in-app splash screen + the PWA icon. Permanent
+// Marker has a thick graffiti / sticker-applied-by-hand feel that matches
+// the Madbeka brand voice. Same font on both surfaces keeps the Android
+// splash → React splash hand-off visually seamless.
+const permanentMarker = Permanent_Marker({
+  variable: "--font-permanent-marker",
   subsets: ["latin"],
   weight: "400",
   display: "swap",
@@ -70,7 +71,7 @@ export default function RootLayout({
           heebo.variable,
           "font-sans",
           geist.variable,
-          rubikWetPaint.variable,
+          permanentMarker.variable,
         )}
       >
         <body className="min-h-full flex flex-col font-sans">

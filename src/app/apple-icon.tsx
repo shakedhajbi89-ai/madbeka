@@ -10,11 +10,11 @@ export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
 export default async function AppleIcon() {
-  const fontData = await loadGoogleFont("Rubik+Wet+Paint", LOGO_TEXT);
+  const fontData = await loadGoogleFont("Permanent+Marker", LOGO_TEXT);
   return new ImageResponse(<LogoImageJSX size={180} paddingRatio={0.08} />, {
     ...size,
     fonts: [
-      { name: "Rubik Wet Paint", data: fontData, style: "normal", weight: 400 },
+      { name: "Permanent Marker", data: fontData, style: "normal", weight: 400 },
     ],
   });
 }

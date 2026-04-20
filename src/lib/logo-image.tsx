@@ -1,7 +1,8 @@
 /**
  * Shared logo renderer for Next.js icon generation (favicon, apple-icon,
- * PWA manifest icons). Renders the "Madbeka" wordmark in Rubik Wet Paint —
- * a brushy/dripping Google Font that matches the hand-painted reference.
+ * PWA manifest icons). Renders the brand mark in Permanent Marker — a
+ * thick graffiti / marker-pen Google Font that reads as a hand-applied
+ * sticker, matching the Madbeka voice.
  *
  * Font is fetched at generation time since `next/og` ImageResponse does not
  * have access to the browser font cache or CSS @font-face rules.
@@ -56,17 +57,16 @@ export function LogoImageJSX({
   const availableSide = size * (1 - 2 * paddingRatio);
 
   // Vertical layout: bold "M" on top, "Madbeka" wordmark below.
-  // Proportions chosen so the M still dominates at every size (home-screen
-  // icon legibility) while the wordmark is readable on the splash screen
-  // (rendered from the 512×512 icon on Android PWA launch).
+  // Permanent Marker is narrower than Rubik Wet Paint was, so we can push
+  // the M a touch larger without clipping at the tile edges.
   //
   // height budget inside the tile:
-  //   M letter   : 0.68
+  //   M letter   : 0.70
   //   gap        : 0.04
-  //   wordmark   : 0.18
+  //   wordmark   : 0.16
   //   slack      : 0.10  (breathing room top + bottom)
-  const mFontSize = availableSide * 0.68;
-  const wordFontSize = availableSide * 0.18;
+  const mFontSize = availableSide * 0.70;
+  const wordFontSize = availableSide * 0.16;
   const gap = availableSide * 0.04;
 
   return (
@@ -86,7 +86,7 @@ export function LogoImageJSX({
       <div
         style={{
           display: "flex",
-          fontFamily: "Rubik Wet Paint",
+          fontFamily: "Permanent Marker",
           fontSize: mFontSize,
           color: "#000000",
           lineHeight: 1,
@@ -97,7 +97,7 @@ export function LogoImageJSX({
       <div
         style={{
           display: "flex",
-          fontFamily: "Rubik Wet Paint",
+          fontFamily: "Permanent Marker",
           fontSize: wordFontSize,
           color: "#000000",
           lineHeight: 1,

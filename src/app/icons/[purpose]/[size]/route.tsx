@@ -45,7 +45,7 @@ export async function GET(
   const paddingRatio = purpose === "maskable" ? 0.18 : 0.08;
 
   try {
-    const fontData = await loadGoogleFont("Rubik+Wet+Paint", LOGO_TEXT);
+    const fontData = await loadGoogleFont("Permanent+Marker", LOGO_TEXT);
 
     return new ImageResponse(
       <LogoImageJSX size={size} paddingRatio={paddingRatio} />,
@@ -54,7 +54,7 @@ export async function GET(
         height: size,
         fonts: [
           {
-            name: "Rubik Wet Paint",
+            name: "Permanent Marker",
             data: fontData,
             style: "normal",
             weight: 400,

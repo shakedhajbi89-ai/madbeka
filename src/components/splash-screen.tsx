@@ -94,7 +94,7 @@ export function SplashScreen() {
         // loaded yet — ugly but only for a flash, and the clip-path reveal
         // still "works" on a fallback face.
         fontFamily:
-          "var(--font-rubik-wet-paint), 'Rubik Wet Paint', cursive",
+          "var(--font-permanent-marker), 'Permanent Marker', cursive",
       }}
     >
       {/*
