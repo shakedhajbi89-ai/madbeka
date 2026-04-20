@@ -53,7 +53,18 @@ export function LogoImageJSX({
   paddingRatio?: number;
 }) {
   const pad = size * paddingRatio;
-  // Rotation and letter spacing chosen to mimic the hand-drawn reference.
+
+  // Rubik Wet Paint is a wide display face — each "Madbeka" glyph averages
+  // ~0.72em, so the full word is ≈ 5.0em (7 chars × 0.72). We size the font
+  // so 5.0em fits inside the available width with a small safety margin,
+  // and we account for the -3° rotation which extends the bounding box
+  // slightly along the diagonal.
+  //
+  // availableWidth = size * (1 - 2*paddingRatio)
+  // fontSize     ≈ availableWidth / 5.4   (5.0 for glyphs + 0.4 rotation slack)
+  const availableWidth = size * (1 - 2 * paddingRatio);
+  const fontSize = availableWidth / 5.4;
+
   return (
     <div
       style={{
@@ -70,13 +81,14 @@ export function LogoImageJSX({
         style={{
           display: "flex",
           fontFamily: "Rubik Wet Paint",
-          // Size the wordmark to fit the available width. The font is wide;
-          // 0.22 * size works well at 192/512 and still reads at 32.
-          fontSize: size * 0.22,
+          fontSize,
           color: "#000000",
           letterSpacing: "-0.01em",
-          transform: "rotate(-4deg)",
+          // Subtle tilt mimics the hand-drawn reference without eating so
+          // much horizontal room that the last glyph clips.
+          transform: "rotate(-3deg)",
           lineHeight: 1,
+          whiteSpace: "nowrap",
         }}
       >
         Madbeka
