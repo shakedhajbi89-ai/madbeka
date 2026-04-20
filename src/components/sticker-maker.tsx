@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { removeBackground } from "@imgly/background-removal";
 import { SignUpButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import {
+  clearPendingSticker,
   downloadBlob,
+  loadPendingSticker,
   progressKeyToHebrewLabel,
+  savePendingSticker,
   toWhatsAppSticker,
 } from "@/lib/sticker-utils";
 
@@ -45,7 +48,28 @@ export function StickerMaker() {
     setPendingDownload(false);
     setProgress(INITIAL_PROGRESS);
     setStage("idle");
+    clearPendingSticker();
   }, [resultUrl]);
+
+  /**
+   * Restore a sticker that was generated before the user was redirected away
+   * for OAuth sign-up (e.g. Google). Runs once on mount — if nothing is pending,
+   * this is a no-op.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const blob = await loadPendingSticker();
+      if (!blob || cancelled) return;
+      const url = URL.createObjectURL(blob);
+      setResultBlob(blob);
+      setResultUrl(url);
+      setStage("result");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const processFile = useCallback(async (file: File) => {
     setErrorMsg("");
@@ -54,6 +78,11 @@ export function StickerMaker() {
 
     try {
       const transparentBlob = await removeBackground(file, {
+        // "isnet" = full-precision model (~175MB). Bigger download on first use,
+        // cached after that — materially fewer background artifacts around hair,
+        // fur, and soft edges vs. the default "medium" (fp16) model.
+        model: "isnet",
+        output: { format: "image/png", quality: 1 },
         progress: (key, current, total) => {
           const label = progressKeyToHebrewLabel(key);
           const pct = total
@@ -71,6 +100,10 @@ export function StickerMaker() {
       setResultUrl(url);
       setProgress({ label: "מוכן!", percent: 100 });
       setStage("result");
+
+      // Persist across potential OAuth redirects so the sticker survives a
+      // Google sign-up round-trip.
+      void savePendingSticker(stickerBlob);
     } catch (err) {
       console.error("Sticker generation failed:", err);
       const msg =
@@ -125,6 +158,7 @@ export function StickerMaker() {
       if (!res.ok) throw new Error("שגיאה ברישום המדבקה");
 
       downloadBlob(resultBlob, "madbeka-sticker.webp");
+      clearPendingSticker();
     } catch (err) {
       console.error(err);
       setErrorMsg(
@@ -217,11 +251,7 @@ export function StickerMaker() {
             </Button>
           ) : (
             <>
-              <SignUpButton
-                mode="modal"
-                forceRedirectUrl="/"
-                signInForceRedirectUrl="/"
-              >
+              <SignUpButton mode="modal">
                 <Button className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white hover:bg-[color:var(--brand-green-dark)]">
                   הירשם והורד
                 </Button>
