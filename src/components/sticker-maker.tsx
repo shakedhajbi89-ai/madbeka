@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { removeBackground } from "@imgly/background-removal";
+import { SignUpButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import {
   downloadBlob,
@@ -9,7 +10,7 @@ import {
   toWhatsAppSticker,
 } from "@/lib/sticker-utils";
 
-type Stage = "idle" | "processing" | "result" | "error";
+type Stage = "idle" | "processing" | "result" | "paywall" | "error";
 
 interface ProgressState {
   label: string;
@@ -22,12 +23,16 @@ const INITIAL_PROGRESS: ProgressState = {
 };
 
 export function StickerMaker() {
+  const { isSignedIn } = useAuth();
+
   const [stage, setStage] = useState<Stage>("idle");
   const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingDownload, setPendingDownload] = useState(false);
+  const [isLoggingDownload, setIsLoggingDownload] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -37,6 +42,7 @@ export function StickerMaker() {
     setResultUrl(null);
     setResultBlob(null);
     setErrorMsg("");
+    setPendingDownload(false);
     setProgress(INITIAL_PROGRESS);
     setStage("idle");
   }, [resultUrl]);
@@ -80,7 +86,6 @@ export function StickerMaker() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) void processFile(file);
-      // allow re-selecting the same file
       e.target.value = "";
     },
     [processFile],
@@ -96,9 +101,40 @@ export function StickerMaker() {
     [processFile],
   );
 
-  const onDownload = useCallback(() => {
-    if (resultBlob) downloadBlob(resultBlob, "madbeka-sticker.webp");
-  }, [resultBlob]);
+  /**
+   * Single entry point for "give me the file".
+   * Requires auth. Hits the server to log the event (which enforces free-tier limit).
+   * Only triggers the browser download if the server confirms.
+   */
+  const confirmAndDownload = useCallback(async () => {
+    if (!resultBlob) return;
+
+    if (!isSignedIn) {
+      // SignedOut branch shows a SignUpButton — we just flag intent.
+      setPendingDownload(true);
+      return;
+    }
+
+    setIsLoggingDownload(true);
+    try {
+      const res = await fetch("/api/stickers/log", { method: "POST" });
+      if (res.status === 402) {
+        setStage("paywall");
+        return;
+      }
+      if (!res.ok) throw new Error("שגיאה ברישום המדבקה");
+
+      downloadBlob(resultBlob, "madbeka-sticker.webp");
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(
+        err instanceof Error ? err.message : "משהו השתבש בהורדה. נסה שוב.",
+      );
+      setStage("error");
+    } finally {
+      setIsLoggingDownload(false);
+    }
+  }, [isSignedIn, resultBlob]);
 
   // ---------- RENDER ----------
 
@@ -124,6 +160,33 @@ export function StickerMaker() {
     );
   }
 
+  if (stage === "paywall") {
+    return (
+      <div className="w-full max-w-md space-y-4 rounded-2xl border-2 border-[color:var(--brand-green)] bg-white p-8 text-center shadow-sm">
+        <div className="text-4xl">🔓</div>
+        <h2 className="text-xl font-bold text-gray-900">
+          סיימת את 3 המדבקות החינמיות!
+        </h2>
+        <p className="text-sm text-gray-700">
+          ברכישה חד-פעמית של ₪35 תקבל מדבקות ללא הגבלה, בלי סימון, ועם פיצ&apos;רים
+          מתקדמים.
+        </p>
+        <Button
+          disabled
+          className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white"
+        >
+          עמוד תשלום — בקרוב
+        </Button>
+        <button
+          onClick={resetToIdle}
+          className="text-sm text-gray-500 underline"
+        >
+          חזרה
+        </button>
+      </div>
+    );
+  }
+
   if (stage === "result" && resultUrl) {
     return (
       <div className="w-full max-w-md space-y-5 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -131,7 +194,7 @@ export function StickerMaker() {
           המדבקה מוכנה! 🎉
         </h2>
 
-        <div className="mx-auto flex h-64 w-64 items-center justify-center rounded-xl border border-gray-200 checkerboard">
+        <div className="checkerboard mx-auto flex h-64 w-64 items-center justify-center rounded-xl border border-gray-200">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resultUrl}
@@ -144,12 +207,36 @@ export function StickerMaker() {
         </p>
 
         <div className="flex flex-col gap-2">
-          <Button
-            onClick={onDownload}
-            className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white hover:bg-[color:var(--brand-green-dark)]"
-          >
-            הורד מדבקה
-          </Button>
+          {isSignedIn ? (
+            <Button
+              onClick={confirmAndDownload}
+              disabled={isLoggingDownload}
+              className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white hover:bg-[color:var(--brand-green-dark)]"
+            >
+              {isLoggingDownload ? "מוריד..." : "הורד מדבקה"}
+            </Button>
+          ) : (
+            <>
+              <SignUpButton
+                mode="modal"
+                forceRedirectUrl="/"
+                signInForceRedirectUrl="/"
+              >
+                <Button className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white hover:bg-[color:var(--brand-green-dark)]">
+                  הירשם והורד
+                </Button>
+              </SignUpButton>
+              <p className="text-center text-xs text-gray-500">
+                רישום מהיר עם Google או אימייל. 3 מדבקות חינם.
+              </p>
+              {pendingDownload && (
+                <p className="text-center text-xs text-[color:var(--brand-green-dark)]">
+                  ↑ לחץ כאן כדי להמשיך
+                </p>
+              )}
+            </>
+          )}
+
           <Button
             variant="outline"
             onClick={resetToIdle}
@@ -158,10 +245,6 @@ export function StickerMaker() {
             יצירת מדבקה חדשה
           </Button>
         </div>
-
-        <p className="text-center text-xs text-gray-500">
-          כדי להוסיף לוואטסאפ: פתח וואטסאפ ← שיתוף ← בחר את הקובץ שהורדת.
-        </p>
       </div>
     );
   }

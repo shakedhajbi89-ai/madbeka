@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Heebo, Geist } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
+import { heIL } from "@clerk/localizations";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const heebo = Heebo({
   variable: "--font-heebo",
@@ -31,12 +33,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="he"
-      dir="rtl"
-      className={cn("h-full", "antialiased", heebo.variable, "font-sans", geist.variable)}
+    <ClerkProvider
+      localization={heIL}
+      appearance={{
+        variables: {
+          colorPrimary: "#25D366",
+          fontFamily: "var(--font-heebo), system-ui, sans-serif",
+        },
+      }}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
-    </html>
+      <html
+        lang="he"
+        dir="rtl"
+        className={cn(
+          "h-full",
+          "antialiased",
+          heebo.variable,
+          "font-sans",
+          geist.variable,
+        )}
+      >
+        <body className="min-h-full flex flex-col font-sans">{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }
