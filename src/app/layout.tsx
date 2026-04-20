@@ -19,6 +19,13 @@ export const metadata: Metadata = {
   description:
     "מחולל המדבקות הישראלי הכי מהיר. הופכים תמונה למדבקת וואטסאפ תוך 10 שניות. עברית מלאה, ביטויים ישראליים, בלי חיכוך.",
   metadataBase: new URL("https://madbeka.co.il"),
+  manifest: "/manifest.webmanifest",
+  // iOS Safari reads these when the user taps "Add to Home Screen".
+  appleWebApp: {
+    capable: true,
+    title: "Madbeka",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
