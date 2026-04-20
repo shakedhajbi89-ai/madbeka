@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo } from "next/font/google";
+import { Heebo, Geist } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const heebo = Heebo({
   variable: "--font-heebo",
@@ -31,7 +34,7 @@ export default function RootLayout({
     <html
       lang="he"
       dir="rtl"
-      className={`${heebo.variable} h-full antialiased`}
+      className={cn("h-full", "antialiased", heebo.variable, "font-sans", geist.variable)}
     >
       <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
