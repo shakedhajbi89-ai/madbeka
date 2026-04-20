@@ -282,6 +282,10 @@ export function StickerMaker() {
       "checkout[success_url]",
       `${window.location.origin}/?paid=1`,
     );
+    // Force the checkout UI to Hebrew regardless of the buyer's browser locale.
+    // Without this, LS picks from Accept-Language, which can show fields in
+    // Bulgarian/Russian for some locales and confuses Israeli buyers.
+    url.searchParams.set("checkout[locale]", "he");
     window.location.href = url.toString();
   }, [userId]);
 
