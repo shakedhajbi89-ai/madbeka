@@ -6,6 +6,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { SplashScreen } from "@/components/splash-screen";
+import { SwRegistrar } from "@/components/sw-registrar";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -77,6 +78,7 @@ export default function RootLayout({
         <body className="min-h-full flex flex-col font-sans">
           <SplashScreen />
           {children}
+          <SwRegistrar />
           <GoogleAnalytics />
         </body>
       </html>
