@@ -13,11 +13,26 @@ import {
   toWhatsAppSticker,
 } from "@/lib/sticker-utils";
 
-type Stage = "idle" | "processing" | "result" | "paywall" | "error";
+type Stage =
+  | "idle"
+  | "processing"
+  | "result"
+  | "paywall"
+  | "paid_success"
+  | "error";
 
 interface ProgressState {
   label: string;
   percent: number;
+}
+
+interface UserStatus {
+  userId: string;
+  email: string;
+  hasPaid: boolean;
+  stickerCount: number;
+  freeRemaining: number;
+  canCreate: boolean;
 }
 
 const INITIAL_PROGRESS: ProgressState = {
@@ -26,7 +41,7 @@ const INITIAL_PROGRESS: ProgressState = {
 };
 
 export function StickerMaker() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
 
   const [stage, setStage] = useState<Stage>("idle");
   const [progress, setProgress] = useState<ProgressState>(INITIAL_PROGRESS);
@@ -36,6 +51,7 @@ export function StickerMaker() {
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDownload, setPendingDownload] = useState(false);
   const [isLoggingDownload, setIsLoggingDownload] = useState(false);
+  const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -52,13 +68,72 @@ export function StickerMaker() {
   }, [resultUrl]);
 
   /**
-   * Restore a sticker that was generated before the user was redirected away
-   * for OAuth sign-up (e.g. Google). Runs once on mount — if nothing is pending,
-   * this is a no-op.
+   * Pull the authenticated user's payment + usage status.
+   * Used to decide watermark on/off and gate the paywall.
+   * Silently fails when not signed in (401 is expected).
    */
+  const refreshUserStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/stickers/me");
+      if (!res.ok) {
+        setUserStatus(null);
+        return;
+      }
+      const data = (await res.json()) as UserStatus;
+      setUserStatus(data);
+    } catch {
+      setUserStatus(null);
+    }
+  }, []);
+
+  // Whenever auth state flips to signed-in, refresh status. Wrapped in an
+  // async IIFE so all setState calls land in a microtask — satisfies
+  // react-hooks/set-state-in-effect.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (isSignedIn) {
+        await refreshUserStatus();
+      } else {
+        await Promise.resolve();
+        if (!cancelled) setUserStatus(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, refreshUserStatus]);
+
+  /**
+   * Restore a sticker that was generated before the user was redirected away
+   * for OAuth sign-up (e.g. Google). Runs once on mount — if nothing is pending,
+   * this is a no-op. Also detects the `?paid=1` return from Lemon Squeezy and
+   * shows the paid-success screen.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // Defer everything below to a microtask so setState calls don't happen
+      // synchronously in the effect body (react-hooks/set-state-in-effect).
+      await Promise.resolve();
+      if (cancelled) return;
+
+      // Handle return from Lemon Squeezy checkout.
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("paid") === "1") {
+          // Strip the query so a refresh doesn't re-trigger the success screen.
+          window.history.replaceState({}, "", window.location.pathname);
+          // The persisted sticker was generated pre-payment and carries a
+          // watermark. Clear it so the user starts fresh on the paid tier.
+          clearPendingSticker();
+          setStage("paid_success");
+          void refreshUserStatus();
+          return;
+        }
+      }
+
       const blob = await loadPendingSticker();
       if (!blob || cancelled) return;
       const url = URL.createObjectURL(blob);
@@ -69,51 +144,60 @@ export function StickerMaker() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshUserStatus]);
 
-  const processFile = useCallback(async (file: File) => {
-    setErrorMsg("");
-    setProgress(INITIAL_PROGRESS);
-    setStage("processing");
+  const processFile = useCallback(
+    async (file: File) => {
+      setErrorMsg("");
+      setProgress(INITIAL_PROGRESS);
+      setStage("processing");
 
-    try {
-      const transparentBlob = await removeBackground(file, {
-        // "isnet" = full-precision model (~175MB). Bigger download on first use,
-        // cached after that — materially fewer background artifacts around hair,
-        // fur, and soft edges vs. the default "medium" (fp16) model.
-        model: "isnet",
-        output: { format: "image/png", quality: 1 },
-        progress: (key, current, total) => {
-          const label = progressKeyToHebrewLabel(key);
-          const pct = total
-            ? Math.min(92, Math.max(5, Math.round((current / total) * 90) + 5))
-            : 50;
-          setProgress({ label, percent: pct });
-        },
-      });
+      try {
+        const transparentBlob = await removeBackground(file, {
+          // "isnet" = full-precision model (~175MB). Bigger download on first
+          // use, cached after that — materially fewer background artifacts
+          // around hair, fur, and soft edges vs. the default "medium" model.
+          model: "isnet",
+          output: { format: "image/png", quality: 1 },
+          progress: (key, current, total) => {
+            const label = progressKeyToHebrewLabel(key);
+            const pct = total
+              ? Math.min(92, Math.max(5, Math.round((current / total) * 90) + 5))
+              : 50;
+            setProgress({ label, percent: pct });
+          },
+        });
 
-      setProgress({ label: "מכין את המדבקה לוואטסאפ...", percent: 96 });
-      const stickerBlob = await toWhatsAppSticker(transparentBlob);
-      const url = URL.createObjectURL(stickerBlob);
+        setProgress({ label: "מכין את המדבקה לוואטסאפ...", percent: 96 });
+        // Paid users get clean stickers. Everyone else (incl. not-yet-signed-in)
+        // gets the watermark. Refunded users fall back to watermarked — the
+        // server already flips hasPaid to false in that case.
+        const shouldWatermark = !(userStatus?.hasPaid === true);
+        const stickerBlob = await toWhatsAppSticker(transparentBlob, {
+          watermark: shouldWatermark,
+        });
+        const url = URL.createObjectURL(stickerBlob);
 
-      setResultBlob(stickerBlob);
-      setResultUrl(url);
-      setProgress({ label: "מוכן!", percent: 100 });
-      setStage("result");
+        setResultBlob(stickerBlob);
+        setResultUrl(url);
+        setProgress({ label: "מוכן!", percent: 100 });
+        setStage("result");
 
-      // Persist across potential OAuth redirects so the sticker survives a
-      // Google sign-up round-trip.
-      void savePendingSticker(stickerBlob);
-    } catch (err) {
-      console.error("Sticker generation failed:", err);
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "משהו השתבש ביצירת המדבקה. נסה שוב עם תמונה אחרת.";
-      setErrorMsg(msg);
-      setStage("error");
-    }
-  }, []);
+        // Persist across potential OAuth redirects so the sticker survives a
+        // Google sign-up round-trip.
+        void savePendingSticker(stickerBlob);
+      } catch (err) {
+        console.error("Sticker generation failed:", err);
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "משהו השתבש ביצירת המדבקה. נסה שוב עם תמונה אחרת.";
+        setErrorMsg(msg);
+        setStage("error");
+      }
+    },
+    [userStatus],
+  );
 
   const onInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,6 +241,15 @@ export function StickerMaker() {
       }
       if (!res.ok) throw new Error("שגיאה ברישום המדבקה");
 
+      // Server returns the new UserStatus — cache it so a subsequent generation
+      // uses the latest hasPaid / freeRemaining.
+      try {
+        const data = (await res.json()) as UserStatus;
+        setUserStatus(data);
+      } catch {
+        /* ignore body parse errors — download proceeds regardless */
+      }
+
       downloadBlob(resultBlob, "madbeka-sticker.webp");
       clearPendingSticker();
     } catch (err) {
@@ -169,6 +262,28 @@ export function StickerMaker() {
       setIsLoggingDownload(false);
     }
   }, [isSignedIn, resultBlob]);
+
+  /**
+   * Send the user to the Lemon Squeezy checkout with their Clerk user_id
+   * threaded through custom data, so our webhook can attribute the payment
+   * to the right account. success_url brings them back to /?paid=1 where the
+   * UI flips to the paid-success screen and refreshes hasPaid from the server.
+   */
+  const goToCheckout = useCallback(() => {
+    const base = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL;
+    if (!base || !userId) {
+      setErrorMsg("לא ניתן להתחיל את התשלום כרגע. נסה שוב עוד רגע.");
+      setStage("error");
+      return;
+    }
+    const url = new URL(base);
+    url.searchParams.set("checkout[custom][user_id]", userId);
+    url.searchParams.set(
+      "checkout[success_url]",
+      `${window.location.origin}/?paid=1`,
+    );
+    window.location.href = url.toString();
+  }, [userId]);
 
   // ---------- RENDER ----------
 
@@ -206,10 +321,10 @@ export function StickerMaker() {
           מתקדמים.
         </p>
         <Button
-          disabled
-          className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white"
+          onClick={goToCheckout}
+          className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white hover:bg-[color:var(--brand-green-dark)]"
         >
-          עמוד תשלום — בקרוב
+          שלם ₪35 והסר הגבלה
         </Button>
         <button
           onClick={resetToIdle}
@@ -217,6 +332,24 @@ export function StickerMaker() {
         >
           חזרה
         </button>
+      </div>
+    );
+  }
+
+  if (stage === "paid_success") {
+    return (
+      <div className="w-full max-w-md space-y-5 rounded-2xl border-2 border-[color:var(--brand-green)] bg-white p-8 text-center shadow-sm">
+        <div className="text-5xl">🎉</div>
+        <h2 className="text-2xl font-bold text-gray-900">תודה על הרכישה!</h2>
+        <p className="text-sm text-gray-700">
+          מהרגע הזה כל המדבקות שתיצור יהיו ללא הגבלה וללא סימון.
+        </p>
+        <Button
+          onClick={resetToIdle}
+          className="h-12 w-full bg-[color:var(--brand-green)] text-base font-semibold text-white hover:bg-[color:var(--brand-green-dark)]"
+        >
+          התחל ליצור מדבקות
+        </Button>
       </div>
     );
   }
@@ -353,6 +486,12 @@ export function StickerMaker() {
         <p className="text-xs text-gray-500">
           הסרת הרקע קורית בדפדפן שלך — התמונה לא נשלחת לאף שרת.
         </p>
+
+        {userStatus?.hasPaid && (
+          <p className="text-xs font-medium text-[color:var(--brand-green-dark)]">
+            ✓ חשבון משולם — מדבקות ללא הגבלה וללא סימון
+          </p>
+        )}
       </div>
     </div>
   );
