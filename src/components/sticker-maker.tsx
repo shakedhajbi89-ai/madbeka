@@ -131,7 +131,7 @@ export function StickerMaker() {
           המדבקה מוכנה! 🎉
         </h2>
 
-        <div className="mx-auto flex h-64 w-64 items-center justify-center rounded-xl bg-[repeating-conic-gradient(#f3f4f6_0%_25%,_#ffffff_0%_50%)_50%_/_20px_20px]">
+        <div className="mx-auto flex h-64 w-64 items-center justify-center rounded-xl border border-gray-200 checkerboard">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resultUrl}
@@ -139,6 +139,9 @@ export function StickerMaker() {
             className="max-h-60 max-w-60 object-contain"
           />
         </div>
+        <p className="text-center text-xs text-gray-500">
+          הרקע המשובץ מציין שהמדבקה שקופה — בוואטסאפ היא תופיע נקי לגמרי.
+        </p>
 
         <div className="flex flex-col gap-2">
           <Button

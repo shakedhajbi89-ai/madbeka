@@ -22,7 +22,9 @@ export async function toWhatsAppSticker(source: Blob): Promise<Blob> {
   canvas.width = STICKER_SIZE;
   canvas.height = STICKER_SIZE;
 
-  const ctx = canvas.getContext("2d");
+  // alpha: true is default, but we set it explicitly because a transparent
+  // background is critical for WhatsApp stickers.
+  const ctx = canvas.getContext("2d", { alpha: true });
   if (!ctx) throw new Error("לא ניתן לגשת ל-canvas בדפדפן הזה");
 
   // Fit preserving aspect ratio, centered
