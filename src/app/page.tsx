@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { StickerMaker } from "@/components/sticker-maker";
+import { PUBLIC_DOMAIN } from "@/lib/brand";
 
 export default async function Home() {
   const { userId } = await auth();
@@ -76,8 +78,24 @@ export default async function Home() {
             </ol>
           </section>
 
-          <footer className="pt-6 text-xs text-gray-500">
-            madbeka.co.il · 3 מדבקות חינם, ₪35 לגישה מלאה
+          <footer className="space-y-2 pt-6 text-xs text-gray-500">
+            <div>{PUBLIC_DOMAIN} · 3 מדבקות חינם, ₪35 לגישה מלאה</div>
+            <nav
+              className="flex items-center justify-center gap-3 text-gray-600"
+              aria-label="מסמכים משפטיים"
+            >
+              <Link href="/terms" className="hover:text-black hover:underline">
+                תנאי שימוש
+              </Link>
+              <span aria-hidden="true">·</span>
+              <Link href="/privacy" className="hover:text-black hover:underline">
+                מדיניות פרטיות
+              </Link>
+              <span aria-hidden="true">·</span>
+              <Link href="/refund" className="hover:text-black hover:underline">
+                מדיניות החזרים
+              </Link>
+            </nav>
           </footer>
         </div>
       </div>

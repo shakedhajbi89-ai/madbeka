@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { SplashScreen } from "@/components/splash-screen";
 import { SwRegistrar } from "@/components/sw-registrar";
+import { PUBLIC_URL } from "@/lib/brand";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
   title: "Madbeka — מתמונה למדבקה תוך 10 שניות",
   description:
     "מחולל המדבקות הישראלי הכי מהיר. הופכים תמונה למדבקת וואטסאפ תוך 10 שניות. עברית מלאה, ביטויים ישראליים, בלי חיכוך.",
-  metadataBase: new URL("https://madbeka.co.il"),
+  metadataBase: new URL(PUBLIC_URL),
   manifest: "/manifest.webmanifest",
   // iOS Safari reads these when the user taps "Add to Home Screen".
   appleWebApp: {

@@ -7,6 +7,8 @@
  *  - < 100 KB per sticker
  */
 
+import { PUBLIC_DOMAIN } from "./brand";
+
 const STICKER_SIZE = 512;
 const WEBP_QUALITY = 0.92;
 // Small breathing room around the subject so it doesn't kiss the sticker edges.
@@ -16,7 +18,7 @@ const BBOX_ALPHA_THRESHOLD = 20;
 
 export interface StickerOptions {
   /**
-   * When true, burn a "madbeka.co.il" watermark into the bottom-right corner.
+   * When true, burn a domain watermark into the bottom-right corner.
    * Applied to every free-tier sticker; removed once the user has paid.
    */
   watermark: boolean;
@@ -173,12 +175,12 @@ function sharpenAlphaMask(ctx: CanvasRenderingContext2D, size: number): void {
 }
 
 /**
- * Burn `madbeka.co.il` into the bottom-right corner inside a semi-transparent
+ * Burn the brand domain into the bottom-right corner inside a semi-transparent
  * black pill, so the watermark is legible on both light and dark WhatsApp chat
  * backgrounds. Designed to survive WhatsApp's downscale to ~120px.
  */
 function drawWatermark(ctx: CanvasRenderingContext2D, size: number): void {
-  const text = "madbeka.co.il";
+  const text = PUBLIC_DOMAIN;
   const fontSize = 20;
   const edgePadding = 12;
   const pillPaddingX = 10;
