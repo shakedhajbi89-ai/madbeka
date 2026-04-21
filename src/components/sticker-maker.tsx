@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { removeBackground } from "@imgly/background-removal";
+import { preload, removeBackground } from "@imgly/background-removal";
 import { SignUpButton, useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import {
@@ -146,6 +146,17 @@ export function StickerMaker() {
     };
   }, [refreshUserStatus]);
 
+  // Fire-and-forget model preload on mount so the ~90MB isnet_fp16 assets are
+  // already in the browser cache by the time the user picks a photo. Without
+  // this the first sticker of a session pays the full download cost inline,
+  // stretching perceived processing time by several seconds on slow networks.
+  useEffect(() => {
+    void preload({ model: "isnet_fp16" }).catch(() => {
+      // Preload is best-effort. A failure here just means the real
+      // removeBackground() call will do the download itself — no UI impact.
+    });
+  }, []);
+
   const processFile = useCallback(
     async (file: File) => {
       setErrorMsg("");
@@ -154,10 +165,10 @@ export function StickerMaker() {
 
       try {
         const transparentBlob = await removeBackground(file, {
-          // "isnet" = full-precision model (~175MB). Bigger download on first
-          // use, cached after that — materially fewer background artifacts
-          // around hair, fur, and soft edges vs. the default "medium" model.
-          model: "isnet",
+          // fp16 variant of the isnet model (~90MB). Roughly half the file
+          // size and ~2x faster inference than full-precision isnet, with
+          // visually equivalent output for the photo types users upload.
+          model: "isnet_fp16",
           output: { format: "image/png", quality: 1 },
           progress: (key, current, total) => {
             const label = progressKeyToHebrewLabel(key);
