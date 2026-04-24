@@ -1,7 +1,23 @@
 import { ImageResponse } from "next/og";
 import fs from "node:fs";
 import path from "node:path";
-import { BRAND_NAME, PUBLIC_DOMAIN } from "@/lib/brand";
+import { BRAND_NAME } from "@/lib/brand";
+
+/**
+ * Satori (the engine behind next/og ImageResponse) doesn't run a real
+ * bidi algorithm, so `direction: rtl` in CSS doesn't actually flip the
+ * glyph order for Hebrew — each code point is placed left-to-right in
+ * insertion order. For a Hebrew reader that looks mirrored. The reliable
+ * workaround is to reverse the string in memory before rendering: when
+ * Satori then lays the reversed code points out LTR, a Hebrew reader
+ * scanning RTL sees the original forward-reading text.
+ *
+ * Works for plain Hebrew without nikud / complex combining marks, which
+ * is what we have here.
+ */
+function rtl(s: string): string {
+  return Array.from(s).reverse().join("");
+}
 
 /**
  * Open Graph image served at /opengraph-image. Next.js App Router picks
@@ -85,10 +101,9 @@ export default async function Image() {
               fontWeight: 900,
               letterSpacing: -2,
               color: "#0F172A",
-              direction: "rtl",
             }}
           >
-            יאללה
+            {rtl("יאללה")}
           </div>
           <div style={{ fontSize: 110, lineHeight: 1 }}>🔥</div>
         </div>
@@ -105,32 +120,33 @@ export default async function Image() {
           {BRAND_NAME}
         </div>
 
-        {/* Hebrew tagline */}
+        {/* Hebrew tagline — pre-reversed so Satori's LTR layout renders
+            correctly when read RTL by a Hebrew speaker. */}
         <div
           style={{
             fontSize: 40,
             fontWeight: 700,
             marginTop: 14,
-            direction: "rtl",
             textAlign: "center",
             maxWidth: 1000,
             lineHeight: 1.25,
           }}
         >
-          מדבקות וואטסאפ בעברית — צור, גרור, שתף
+          {rtl("מדבקות וואטסאפ בעברית — צור, גרור, שתף")}
         </div>
 
-        {/* URL */}
+        {/* URL — all lowercase + weight 900 so every character carries
+            the same visual weight (no random capital-A standout). */}
         <div
           style={{
-            fontSize: 28,
-            fontWeight: 700,
+            fontSize: 30,
+            fontWeight: 900,
             marginTop: 26,
-            opacity: 0.9,
+            opacity: 0.95,
             letterSpacing: 1,
           }}
         >
-          {PUBLIC_DOMAIN}
+          madbekaapp.co.il
         </div>
       </div>
     ),
