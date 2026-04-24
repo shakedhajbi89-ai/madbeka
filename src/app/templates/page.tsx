@@ -269,13 +269,13 @@ export default function TemplatesPage() {
   );
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center bg-gradient-to-b from-white to-gray-50 px-6 py-6 dark:from-gray-950 dark:to-gray-900">
+    <main className="relative flex min-h-screen flex-col items-center bg-gradient-to-b from-white to-gray-50 px-6 py-6 dark:from-gray-950 dark:to-gray-900 lg:h-screen lg:min-h-0 lg:overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-[400px] bg-gradient-to-b from-[color:var(--brand-green)]/5 via-transparent to-transparent dark:from-[color:var(--brand-green)]/10"
       />
 
-      <div className="relative w-full max-w-6xl space-y-6">
+      <div className="relative w-full max-w-6xl space-y-6 lg:flex lg:h-full lg:flex-col lg:space-y-4">
         <header className="flex items-center justify-between">
           <Link
             href="/"
@@ -305,11 +305,12 @@ export default function TemplatesPage() {
             Order: [rail · preview · controls] — rail on far right so user's
             thumb (on mobile) or eye (on desktop) lands on presets first,
             preview dominates the middle, controls sit on the left. */}
-        {/* On desktop, lock the whole editor to viewport height. Each column
-            handles its own overflow internally, so the PAGE itself doesn't
-            scroll when the user browses through controls — the preview stays
-            visible at all times. On mobile, columns stack and flow naturally. */}
-        <div className="grid gap-4 lg:h-[calc(100vh-10rem)] lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:items-start">
+        {/* Desktop: grid fills all remaining vertical space in the viewport.
+            main is h-screen overflow-hidden so page never scrolls; this grid
+            grows to take what's left after header/title and its columns each
+            scroll internally. Preview stays put while user browses controls.
+            Mobile: columns stack, page flows normally. */}
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:items-start">
           {/* Preset rail — moved to the far-right column (first in DOM in
               RTL context). Vertical strip on desktop, horizontal scroll on
               mobile. One tap loads a preset into the editor. */}
