@@ -312,7 +312,7 @@ export default function TemplatesPage() {
             so the page itself can't scroll — all scrolling happens inside the
             columns, preview stays put.
             Mobile: columns stack, page flows normally. */}
-        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)]">
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-1 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:overflow-hidden">
           {/* Preset rail — moved to the far-right column (first in DOM in
               RTL context). Vertical strip on desktop, horizontal scroll on
               mobile. One tap loads a preset into the editor. */}
