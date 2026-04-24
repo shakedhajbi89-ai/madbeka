@@ -10,6 +10,7 @@ import {
   generateTextSticker,
   paintPreview,
   TEMPLATES,
+  type EmojiPosition,
   type TemplateDef,
   type TextStickerAlign,
   type TextStickerFont,
@@ -44,11 +45,25 @@ const ALIGN_OPTIONS: { id: TextStickerAlign; label: string; icon: string }[] = [
   { id: "left", label: "שמאל", icon: "⇤" },
 ];
 
+// Where the emoji sits relative to the word. Each icon is a mini visual
+// diagram so the user gets it at a glance, no reading required.
+const EMOJI_POS_OPTIONS: { id: EmojiPosition; label: string; icon: string }[] = [
+  { id: "inline", label: "ליד", icon: "😀א" },
+  { id: "above", label: "מעל", icon: "😀\nא" },
+  { id: "below", label: "מתחת", icon: "א\n😀" },
+  { id: "flip", label: "צד נגדי", icon: "א😀" },
+];
+
 export default function TemplatesPage() {
   const { isSignedIn, isLoaded } = useAuth();
 
   // Editor state
   const [text, setText] = useState("יאללה");
+  // Emoji is tracked separately from the word so the user can position it
+  // relative to the word (above / below / opposite side) — not just append
+  // it into the text string. See EmojiPosition in @/lib/text-sticker.
+  const [emoji, setEmoji] = useState("");
+  const [emojiPos, setEmojiPos] = useState<EmojiPosition>("inline");
   const [style, setStyle] = useState<TextStickerStyle>("classic");
   const [font, setFont] = useState<TextStickerFont>("marker");
   const [size, setSize] = useState(160);
@@ -74,6 +89,8 @@ export default function TemplatesPage() {
     const shouldWatermark = !(status?.hasPaid === true);
     const opts = {
       text: text || " ",
+      emoji,
+      emojiPos,
       style,
       font,
       size,
@@ -85,7 +102,7 @@ export default function TemplatesPage() {
     };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [text, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
+  }, [text, emoji, emojiPos, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -121,6 +138,8 @@ export default function TemplatesPage() {
     const shouldWatermark = !(status?.hasPaid === true);
     return generateTextSticker({
       text: text || " ",
+      emoji,
+      emojiPos,
       style,
       font,
       size,
@@ -130,7 +149,7 @@ export default function TemplatesPage() {
       offsetY: offset.y,
       watermark: shouldWatermark,
     });
-  }, [text, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
+  }, [text, emoji, emojiPos, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
 
   const onDownload = useCallback(async () => {
     if (!isSignedIn) {
@@ -188,6 +207,8 @@ export default function TemplatesPage() {
   /** Load a preset into the editor — keeps user's current text choices tidy. */
   const applyTemplate = useCallback((t: TemplateDef) => {
     setText(t.text);
+    setEmoji("");
+    setEmojiPos("inline");
     setStyle(t.style);
     setFont(t.font);
     setRotation(t.rotation ?? 0);
@@ -429,12 +450,59 @@ export default function TemplatesPage() {
             </section>
 
             {/* Emoji picker — categories shown as chips with a sample emoji.
-                Click a category to expand its grid. Click an emoji to append
-                it to the text. */}
+                Click a category to expand its grid. Picked emojis live in
+                a dedicated `emoji` state and can be positioned independently
+                of the word (above / below / opposite side / inline). */}
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <label className="mb-3 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                אימוג׳י
-              </label>
+              <div className="mb-3 flex items-center justify-between">
+                {/* Selected emoji(s) + delete button. Only shown when the user
+                    has actually picked something, so the UI stays clean. */}
+                {emoji ? (
+                  <button
+                    onClick={() => {
+                      setEmoji("");
+                      setEmojiPos("inline");
+                    }}
+                    className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
+                    title="הסר אימוג'י"
+                  >
+                    <span className="text-lg leading-none">{emoji}</span>
+                    <span className="text-xs">✕ הסר</span>
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  אימוג׳י
+                </label>
+              </div>
+
+              {/* Position selector — only makes sense once there's an emoji.
+                  Appears above the category chips so the user can change
+                  placement right after picking. */}
+              {emoji && (
+                <div className="mb-3">
+                  <div className="mb-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                    מיקום האימוג׳י
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {EMOJI_POS_OPTIONS.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setEmojiPos(p.id)}
+                        className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                          emojiPos === p.id
+                            ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] shadow-sm dark:text-[color:var(--brand-green)]"
+                            : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap justify-end gap-2">
                 {EMOJI_CATEGORIES.map((cat) => {
                   const isOpen = openEmojiCat === cat.id;
@@ -465,13 +533,17 @@ export default function TemplatesPage() {
                         <button
                           key={`${openEmojiCat}-${i}`}
                           onClick={() => {
-                            // Append to current text, respecting maxLength.
-                            // Emojis count as ~2 UTF-16 chars each, but the
-                            // input's maxLength is a soft target — we just
-                            // avoid going wildly over.
-                            setText((prev) =>
-                              (prev + e).slice(0, 30),
-                            );
+                            // Append to the dedicated emoji state (not text).
+                            // Cap at 8 emojis — plenty for any sticker, avoids
+                            // overflow inside the canvas.
+                            setEmoji((prev) => {
+                              const combined = prev + e;
+                              // Rough cap via JS string length (emojis are
+                              // ~2 UTF-16 chars each).
+                              return combined.length > 16
+                                ? combined.slice(0, 16)
+                                : combined;
+                            });
                           }}
                           className="flex aspect-square items-center justify-center rounded-xl border border-gray-200 bg-white text-2xl transition-all hover:-translate-y-0.5 hover:border-[color:var(--brand-green)]/50 hover:shadow-md dark:border-gray-800 dark:bg-gray-800"
                         >
@@ -481,7 +553,7 @@ export default function TemplatesPage() {
                     )}
                   </div>
                   <p className="mt-3 text-right text-[10px] text-gray-400">
-                    הקלקה מוסיפה את האימוג׳י לטקסט
+                    הקלקה מוסיפה אימוג׳י — ניתן למקם אותו מעל/מתחת/בצד
                   </p>
                 </div>
               )}
