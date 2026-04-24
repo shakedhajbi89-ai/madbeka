@@ -63,6 +63,12 @@ export interface TextStickerOptions {
    *  above the word the moment the user picks it. */
   emojiOffsetX?: number;
   emojiOffsetY?: number;
+  /** Emoji render size in px. Independent from the word's font size so the
+   *  user can scale emoji and word separately. If not provided, defaults
+   *  to 0.9× the word font size for visual balance. */
+  emojiSize?: number;
+  /** Emoji rotation in degrees. Independent from the word rotation. */
+  emojiRotation?: number;
   style?: TextStickerStyle;
   font?: TextStickerFont;
   /** Max font size in px (auto-shrinks if the word doesn't fit). 40–300. */
@@ -79,11 +85,11 @@ export interface TextStickerOptions {
 }
 
 /**
- * Visible footprint of the emoji on the canvas — the renderer and the hit
- * tester have to agree on this, otherwise dragging feels off. Single source
- * of truth so page.tsx can ask "what size is the emoji at font size N?"
+ * Default emoji size derived from the word font size. Used when the user
+ * hasn't explicitly set an emoji size yet — the emoji looks proportional
+ * to the word (~90% of it) so first-pick looks nice without tweaking.
  */
-export function emojiSizeFor(fontSize: number): number {
+export function defaultEmojiSize(fontSize: number): number {
   return Math.round(fontSize * 0.9);
 }
 
@@ -592,16 +598,23 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
   ctx.restore();
 
   // Emoji layer — drawn INDEPENDENTLY of the word. Its own translate,
-  // its own position, no rotation (stays level even when the word tilts).
-  // This is what lets the user drag the emoji anywhere on the canvas
-  // without the word coming with it.
+  // its own position, its own size, its own rotation. Lets the user size
+  // and rotate the emoji separately from the word.
   if (emoji) {
     ctx.save();
     const emojiX = (opts.emojiOffsetX ?? 0) + size / 2;
     const emojiY = (opts.emojiOffsetY ?? 0) + size / 2;
     ctx.translate(emojiX, emojiY);
 
-    const emojiSize = emojiSizeFor(fontSize);
+    const emojiRotation = opts.emojiRotation ?? 0;
+    if (emojiRotation !== 0) {
+      ctx.rotate((emojiRotation * Math.PI) / 180);
+    }
+
+    const emojiSize = Math.max(
+      20,
+      Math.min(400, opts.emojiSize ?? defaultEmojiSize(fontSize)),
+    );
     ctx.font = `${emojiSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";

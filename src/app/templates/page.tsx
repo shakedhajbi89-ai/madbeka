@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UserButton, useAuth, SignUpButton } from "@clerk/nextjs";
 import {
+  defaultEmojiSize,
   EMOJI_CATEGORIES,
-  emojiSizeFor,
   FONT_OPTIONS,
   fontStack,
   generateTextSticker,
@@ -49,20 +49,28 @@ const ALIGN_OPTIONS: { id: TextStickerAlign; label: string; icon: string }[] = [
 // it above the word so it's immediately visible (not hidden behind the
 // word). User can drag it anywhere from there.
 const DEFAULT_EMOJI_OFFSET = { x: 0, y: -130 };
+const DEFAULT_WORD_SIZE = 160;
+// The "which object do the sliders affect" switch. Word is the default
+// since that's what exists from the moment the page loads.
+type SelectedLayer = "word" | "emoji";
 
 export default function TemplatesPage() {
   const { isSignedIn, isLoaded } = useAuth();
 
   // Editor state
   const [text, setText] = useState("יאללה");
-  // Emoji lives in its own state with its own position — it's a fully
-  // separate draggable layer on the canvas. The user grabs it with mouse
-  // or finger directly on the preview and moves it wherever they want.
+  // Emoji lives in its own state with its own position, size, and rotation
+  // — it's a fully separate draggable layer on the canvas. Size and
+  // rotation can be tuned independently from the word.
   const [emoji, setEmoji] = useState("");
   const [emojiOffset, setEmojiOffset] = useState(DEFAULT_EMOJI_OFFSET);
+  const [emojiSize, setEmojiSize] = useState(defaultEmojiSize(DEFAULT_WORD_SIZE));
+  const [emojiRotation, setEmojiRotation] = useState(0);
+  // Which layer the size/rotation controls currently affect.
+  const [selectedLayer, setSelectedLayer] = useState<SelectedLayer>("word");
   const [style, setStyle] = useState<TextStickerStyle>("classic");
   const [font, setFont] = useState<TextStickerFont>("marker");
-  const [size, setSize] = useState(160);
+  const [size, setSize] = useState(DEFAULT_WORD_SIZE);
   const [rotation, setRotation] = useState(0);
   const [align, setAlign] = useState<TextStickerAlign>("center");
   // User-drag offset of the main WORD inside the 512×512 canvas. (0,0) = centered.
@@ -88,6 +96,8 @@ export default function TemplatesPage() {
       emoji,
       emojiOffsetX: emojiOffset.x,
       emojiOffsetY: emojiOffset.y,
+      emojiSize,
+      emojiRotation,
       style,
       font,
       size,
@@ -99,7 +109,7 @@ export default function TemplatesPage() {
     };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [text, emoji, emojiOffset.x, emojiOffset.y, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
+  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -138,6 +148,8 @@ export default function TemplatesPage() {
       emoji,
       emojiOffsetX: emojiOffset.x,
       emojiOffsetY: emojiOffset.y,
+      emojiSize,
+      emojiRotation,
       style,
       font,
       size,
@@ -147,7 +159,7 @@ export default function TemplatesPage() {
       offsetY: offset.y,
       watermark: shouldWatermark,
     });
-  }, [text, emoji, emojiOffset.x, emojiOffset.y, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
+  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
 
   const onDownload = useCallback(async () => {
     if (!isSignedIn) {
@@ -207,11 +219,14 @@ export default function TemplatesPage() {
     setText(t.text);
     setEmoji("");
     setEmojiOffset(DEFAULT_EMOJI_OFFSET);
+    setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
+    setEmojiRotation(0);
+    setSelectedLayer("word");
     setStyle(t.style);
     setFont(t.font);
     setRotation(t.rotation ?? 0);
     setAlign("center");
-    setSize(160);
+    setSize(DEFAULT_WORD_SIZE);
     setOffset({ x: 0, y: 0 });
     setNotice("");
   }, []);
@@ -244,12 +259,12 @@ export default function TemplatesPage() {
       const cy = (e.clientY - rect.top) * scale - 256;
 
       // Hit-test emoji first (it's drawn on top of the word, so it wins).
-      // The emoji's on-canvas size matches the text fontSize, see
-      // emojiSizeFor. Its bounding box is that size square, centered at
-      // emojiOffset. We add a small touch-target pad for fingers.
+      // Its bounding box is emojiSize × emojiSize centered at emojiOffset.
+      // We add a small touch-target pad for fingers. Clicking on a layer
+      // also SELECTS it so the size/rotation sliders act on it.
       let target: "word" | "emoji" = "word";
       if (emoji) {
-        const half = emojiSizeFor(size) / 2 + 8;
+        const half = emojiSize / 2 + 8;
         if (
           Math.abs(cx - emojiOffset.x) <= half &&
           Math.abs(cy - emojiOffset.y) <= half
@@ -257,6 +272,7 @@ export default function TemplatesPage() {
           target = "emoji";
         }
       }
+      setSelectedLayer(target);
 
       dragStart.current = {
         target,
@@ -268,7 +284,7 @@ export default function TemplatesPage() {
       };
       el.setPointerCapture(e.pointerId);
     },
-    [emoji, emojiOffset.x, emojiOffset.y, offset.x, offset.y, size],
+    [emoji, emojiOffset.x, emojiOffset.y, offset.x, offset.y, emojiSize],
   );
 
   const onPointerMoveCanvas = useCallback(
@@ -487,6 +503,9 @@ export default function TemplatesPage() {
                       onClick={() => {
                         setEmoji("");
                         setEmojiOffset(DEFAULT_EMOJI_OFFSET);
+                        setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
+                        setEmojiRotation(0);
+                        setSelectedLayer("word");
                       }}
                       className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
                       title="הסר אימוג'י"
@@ -549,10 +568,16 @@ export default function TemplatesPage() {
                             // Append to the dedicated emoji state (not text).
                             // Cap at ~8 emojis — plenty for any sticker.
                             setEmoji((prev) => {
-                              // First pick: reset offset to default so the
-                              // new emoji appears above the word where the
-                              // user can see it (not hidden under it).
-                              if (!prev) setEmojiOffset(DEFAULT_EMOJI_OFFSET);
+                              if (!prev) {
+                                // First pick: reset offset, size, rotation to
+                                // sensible defaults so the new emoji lands
+                                // visible and nicely sized, and auto-select
+                                // it so sliders affect it right away.
+                                setEmojiOffset(DEFAULT_EMOJI_OFFSET);
+                                setEmojiSize(defaultEmojiSize(size));
+                                setEmojiRotation(0);
+                                setSelectedLayer("emoji");
+                              }
                               const combined = prev + e;
                               return combined.length > 16
                                 ? combined.slice(0, 16)
@@ -623,62 +648,144 @@ export default function TemplatesPage() {
               </div>
             </section>
 
-            {/* Size + rotation sliders */}
+            {/* Size + rotation sliders — apply to the SELECTED layer
+                (word or emoji). Tab switcher shows up only when an emoji
+                exists, otherwise the sliders act on the word as before. */}
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <div className="space-y-4">
-                {/* Size */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                      {size}px
-                    </span>
-                    <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      גודל
-                    </label>
-                  </div>
-                  <input
-                    type="range"
-                    min="40"
-                    max="280"
-                    step="4"
-                    value={size}
-                    onChange={(e) => setSize(Number(e.target.value))}
-                    dir="rtl"
-                    className="w-full accent-[color:var(--brand-green)]"
-                  />
-                </div>
-
-                {/* Rotation */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                      {rotation}°
-                    </span>
-                    <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      זווית
-                    </label>
-                  </div>
-                  <input
-                    type="range"
-                    min="-45"
-                    max="45"
-                    step="1"
-                    value={rotation}
-                    onChange={(e) => setRotation(Number(e.target.value))}
-                    dir="rtl"
-                    className="w-full accent-[color:var(--brand-green)]"
-                  />
-                  <div className="mt-1 flex justify-between text-[10px] text-gray-400">
-                    <span>-45°</span>
+              {/* Layer switcher */}
+              {emoji && (
+                <div className="mb-4 flex gap-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+                  {([
+                    { id: "word", label: "מילה", preview: text || "א" },
+                    { id: "emoji", label: "אימוג'י", preview: emoji },
+                  ] as const).map((layer) => (
                     <button
-                      onClick={() => setRotation(0)}
-                      className="text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
+                      key={layer.id}
+                      onClick={() => setSelectedLayer(layer.id)}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                        selectedLayer === layer.id
+                          ? "bg-white text-[color:var(--brand-green-dark)] shadow-sm dark:bg-gray-900 dark:text-[color:var(--brand-green)]"
+                          : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                      }`}
                     >
-                      איפוס
+                      <span className="text-base leading-none">{layer.preview}</span>
+                      <span>{layer.label}</span>
                     </button>
-                    <span>+45°</span>
-                  </div>
+                  ))}
                 </div>
+              )}
+              <div className="space-y-4">
+                {/* Size — ranges differ: word 40-280 (display type), emoji 40-400 (emojis scale nicely up) */}
+                {selectedLayer === "emoji" && emoji ? (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                        {emojiSize}px
+                      </span>
+                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        גודל האימוג׳י
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min="40"
+                      max="400"
+                      step="4"
+                      value={emojiSize}
+                      onChange={(e) => setEmojiSize(Number(e.target.value))}
+                      dir="rtl"
+                      className="w-full accent-[color:var(--brand-green)]"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                        {size}px
+                      </span>
+                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        גודל המילה
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min="40"
+                      max="280"
+                      step="4"
+                      value={size}
+                      onChange={(e) => setSize(Number(e.target.value))}
+                      dir="rtl"
+                      className="w-full accent-[color:var(--brand-green)]"
+                    />
+                  </div>
+                )}
+
+                {/* Rotation — emoji gets the full -180/+180 range since
+                    rotated emojis read fine at any angle. Word stays at
+                    ±45° so Hebrew letters remain readable. */}
+                {selectedLayer === "emoji" && emoji ? (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                        {emojiRotation}°
+                      </span>
+                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        זווית האימוג׳י
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min="-180"
+                      max="180"
+                      step="1"
+                      value={emojiRotation}
+                      onChange={(e) => setEmojiRotation(Number(e.target.value))}
+                      dir="rtl"
+                      className="w-full accent-[color:var(--brand-green)]"
+                    />
+                    <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+                      <span>-180°</span>
+                      <button
+                        onClick={() => setEmojiRotation(0)}
+                        className="text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
+                      >
+                        איפוס
+                      </button>
+                      <span>+180°</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                        {rotation}°
+                      </span>
+                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        זווית המילה
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min="-45"
+                      max="45"
+                      step="1"
+                      value={rotation}
+                      onChange={(e) => setRotation(Number(e.target.value))}
+                      dir="rtl"
+                      className="w-full accent-[color:var(--brand-green)]"
+                    />
+                    <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+                      <span>-45°</span>
+                      <button
+                        onClick={() => setRotation(0)}
+                        className="text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
+                      >
+                        איפוס
+                      </button>
+                      <span>+45°</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Alignment */}
                 <div>
