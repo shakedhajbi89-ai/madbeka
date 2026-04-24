@@ -235,17 +235,22 @@ export default function TemplatesPage() {
   }, [isSignedIn]);
 
   // ---------- Layer mutation helpers ----------
-  const updateLayer = useCallback(
-    (id: string, patch: Partial<WordLayer> & Partial<EmojiLayer>) => {
-      setLayers((prev) =>
-        prev.map((l) => (l.id === id ? ({ ...l, ...patch } as StickerLayer) : l)),
-      );
-    },
-    [],
-  );
+  // Patch type unions ALL layer-specific fields so helpers can update
+  // any layer type. Callers are responsible for passing fields that
+  // are valid for the target layer; TS narrowing at the call site is
+  // lightweight here by design.
+  type LayerPatch = Partial<WordLayer> &
+    Partial<EmojiLayer> &
+    Partial<ImageLayer>;
+
+  const updateLayer = useCallback((id: string, patch: LayerPatch) => {
+    setLayers((prev) =>
+      prev.map((l) => (l.id === id ? ({ ...l, ...patch } as StickerLayer) : l)),
+    );
+  }, []);
 
   const patchSelected = useCallback(
-    (patch: Partial<WordLayer> & Partial<EmojiLayer>) => {
+    (patch: LayerPatch) => {
       if (!selectedId) return;
       updateLayer(selectedId, patch);
     },
@@ -298,60 +303,158 @@ export default function TemplatesPage() {
     fileInputRef.current?.click();
   }, []);
 
-  // When the user picks a file (or takes a photo), read it as a data
-  // URL, decode into an HTMLImageElement, cache it by layer id, and
-  // add a new ImageLayer to the stack. Sits on the BACK of the stack
-  // so text/emoji the user later adds naturally appear on top.
+  // Core ingest pipeline used by all image input paths: file picker,
+  // drag-drop, clipboard paste, camera. Takes a File, validates, reads
+  // to data URL, decodes, caches, and adds an ImageLayer.
+  const ingestImageFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setNotice("הקובץ חייב להיות תמונה.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setNotice("התמונה גדולה מדי. מקסימום 10MB.");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.readAsDataURL(file);
+      });
+
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("image decode failed"));
+        img.src = dataUrl;
+      });
+
+      const newLayer = makeImageLayer(
+        dataUrl,
+        img.naturalWidth,
+        img.naturalHeight,
+      );
+      imageCache.current.set(newLayer.id, img);
+      // Insert at BOTTOM of layer stack so existing text/emoji stay on top.
+      setLayers((prev) => [newLayer, ...prev]);
+      setSelectedId(newLayer.id);
+      setImageTick((t) => t + 1);
+      setNotice("");
+    } catch {
+      setNotice("לא הצלחנו לטעון את התמונה. נסה תמונה אחרת.");
+    }
+  }, []);
+
   const handleImageFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      // Reset the input so selecting the same file twice still fires.
       e.target.value = "";
-      if (!file) return;
-      if (!file.type.startsWith("image/")) {
-        setNotice("הקובץ חייב להיות תמונה.");
-        return;
-      }
-      // Generous 10MB cap — anything bigger is either a mistake or
-      // will choke the browser's image decoder anyway.
-      if (file.size > 10 * 1024 * 1024) {
-        setNotice("התמונה גדולה מדי. מקסימום 10MB.");
-        return;
-      }
-      try {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onerror = () => reject(reader.error);
-          reader.onload = () => resolve(String(reader.result ?? ""));
-          reader.readAsDataURL(file);
-        });
-
-        const img = new Image();
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error("image decode failed"));
-          img.src = dataUrl;
-        });
-
-        const newLayer = makeImageLayer(
-          dataUrl,
-          img.naturalWidth,
-          img.naturalHeight,
-        );
-        imageCache.current.set(newLayer.id, img);
-        // Insert the image at the BOTTOM of the layer stack so any
-        // existing text/emoji stay in front of it (natural "photo with
-        // text overlay" default).
-        setLayers((prev) => [newLayer, ...prev]);
-        setSelectedId(newLayer.id);
-        setImageTick((t) => t + 1);
-        setNotice("");
-      } catch {
-        setNotice("לא הצלחנו לטעון את התמונה. נסה תמונה אחרת.");
-      }
+      if (file) await ingestImageFile(file);
     },
-    [],
+    [ingestImageFile],
   );
+
+  // Drag-drop on the canvas preview. preventDefault on dragover is
+  // required for drop to fire at all. We accept only the first dropped
+  // image and ignore non-image drops.
+  const [isDragging, setIsDragging] = useState(false);
+  const onDragEnterCanvas = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      setIsDragging(true);
+    }
+  }, []);
+  const onDragOverCanvas = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+    }
+  }, []);
+  const onDragLeaveCanvas = useCallback((e: React.DragEvent) => {
+    // Only dismiss when leaving the whole dropzone, not its children.
+    if (e.currentTarget === e.target) setIsDragging(false);
+  }, []);
+  const onDropCanvas = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = Array.from(e.dataTransfer.files).find((f) =>
+        f.type.startsWith("image/"),
+      );
+      if (file) await ingestImageFile(file);
+    },
+    [ingestImageFile],
+  );
+
+  // Clipboard paste. Bind on window so it works no matter where the
+  // user's focus is while they hit Ctrl+V (unless they're typing in a
+  // text field, in which case the browser handles the paste).
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // If user is pasting into an input/textarea, let them paste text.
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            await ingestImageFile(file);
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [ingestImageFile]);
+
+  // Background removal via @imgly/background-removal. Runs entirely in
+  // the browser (WebAssembly + ONNX) — no server call, no API cost.
+  // First run downloads a ~30MB model then caches it, so subsequent
+  // removals on the same device are much faster.
+  const [isRemovingBg, setIsRemovingBg] = useState(false);
+  const removeBackgroundFromSelected = useCallback(async () => {
+    if (!selectedImage) return;
+    setIsRemovingBg(true);
+    setNotice("מסיר רקע... הפעם הראשונה עשויה לקחת דקה (הורדת המודל).");
+    try {
+      const { removeBackground } = await import("@imgly/background-removal");
+      const inputBlob = await (await fetch(selectedImage.src)).blob();
+      const resultBlob = await removeBackground(inputBlob);
+
+      const newDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.readAsDataURL(resultBlob);
+      });
+
+      // Re-decode the new transparent image and swap into the cache.
+      const newImg = new Image();
+      await new Promise<void>((resolve, reject) => {
+        newImg.onload = () => resolve();
+        newImg.onerror = () => reject(new Error("decode failed"));
+        newImg.src = newDataUrl;
+      });
+
+      imageCache.current.set(selectedImage.id, newImg);
+      updateLayer(selectedImage.id, { src: newDataUrl });
+      setImageTick((t) => t + 1);
+      setNotice("הרקע הוסר בהצלחה.");
+    } catch {
+      setNotice("לא הצלחנו להסיר את הרקע. נסה תמונה אחרת.");
+    } finally {
+      setIsRemovingBg(false);
+    }
+  }, [selectedImage, updateLayer]);
 
   // Preset click — replaces the entire stack with a single word layer from
   // the preset. This matches the prior behavior where a preset "reset" the
@@ -596,7 +699,17 @@ export default function TemplatesPage() {
 
           {/* Live preview */}
           <div className="mx-auto w-full max-w-[640px] space-y-3 lg:flex lg:h-full lg:flex-col lg:overflow-y-auto">
-            <div className="checkerboard relative overflow-hidden rounded-3xl border border-gray-200 shadow-xl shadow-black/5 dark:border-gray-800 dark:shadow-black/30">
+            <div
+              onDragEnter={onDragEnterCanvas}
+              onDragOver={onDragOverCanvas}
+              onDragLeave={onDragLeaveCanvas}
+              onDrop={onDropCanvas}
+              className={`checkerboard relative overflow-hidden rounded-3xl border shadow-xl shadow-black/5 dark:shadow-black/30 ${
+                isDragging
+                  ? "border-[color:var(--brand-green)] ring-4 ring-[color:var(--brand-green)]/30"
+                  : "border-gray-200 dark:border-gray-800"
+              }`}
+            >
               <canvas
                 ref={previewRef}
                 width={512}
@@ -607,6 +720,13 @@ export default function TemplatesPage() {
                 onPointerCancel={onPointerEndCanvas}
                 className="block aspect-square w-full cursor-grab touch-none select-none active:cursor-grabbing"
               />
+              {isDragging && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[color:var(--brand-green)]/20 backdrop-blur-sm">
+                  <div className="rounded-2xl bg-white px-6 py-4 text-lg font-bold text-[color:var(--brand-green-dark)] shadow-lg dark:bg-gray-900 dark:text-[color:var(--brand-green)]">
+                    📥 שחרר תמונה כאן
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => setZoomed(true)}
                 aria-label="הגדל תצוגה"
@@ -892,6 +1012,29 @@ export default function TemplatesPage() {
                     לאימוג'י זה אין אפשרות לשנות גוון עור.
                   </p>
                 )}
+              </section>
+            )}
+
+            {/* Selected IMAGE controls — background removal. Runs in the
+                browser (WebAssembly + ONNX), no server call. */}
+            {selectedImage && (
+              <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-2xl leading-none">🖼️</div>
+                  <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    תמונה נבחרת
+                  </label>
+                </div>
+                <button
+                  onClick={removeBackgroundFromSelected}
+                  disabled={isRemovingBg}
+                  className="w-full rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-3 text-sm font-bold text-white shadow-md transition hover:shadow-lg disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isRemovingBg ? "⏳ מסיר רקע..." : "✨ הסר רקע אוטומטית"}
+                </button>
+                <p className="mt-2 text-right text-[10px] text-gray-400">
+                  מסיר את הרקע של התמונה ומשאיר רק את הדמות. רץ במקום — לא בענן.
+                </p>
               </section>
             )}
 
