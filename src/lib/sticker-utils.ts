@@ -301,3 +301,64 @@ export function downloadBlob(blob: Blob, filename: string): void {
   // Revoke on next tick so the download kicks off first
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/**
+ * Share the sticker directly to WhatsApp (or another installed app) via the
+ * Web Share API. Works natively on mobile — on desktop falls back to opening
+ * WhatsApp Web with a pre-filled message inviting the user to come back and
+ * share the sticker from mobile.
+ *
+ * Returns:
+ *   - "shared"     → native share sheet opened and completed
+ *   - "cancelled"  → user dismissed the share sheet
+ *   - "fallback"   → Web Share unavailable; we opened wa.me instead
+ *   - "unsupported"→ nothing could be done
+ */
+export type ShareResult = "shared" | "cancelled" | "fallback" | "unsupported";
+
+export async function shareStickerToWhatsApp(
+  blob: Blob,
+  options: { text?: string } = {},
+): Promise<ShareResult> {
+  const text =
+    options.text ??
+    `מדבקה שיצרתי ב-Madbeka 🎨\nתיצור לעצמך אחת ב-${PUBLIC_DOMAIN}`;
+
+  const file = new File([blob], "madbeka-sticker.webp", {
+    type: "image/webp",
+    lastModified: Date.now(),
+  });
+
+  // Native Web Share with file attachment — the gold path on iOS/Android.
+  // WhatsApp will appear in the share sheet alongside Telegram, Instagram, etc.
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.canShare === "function" &&
+    typeof navigator.share === "function"
+  ) {
+    const payload: ShareData = { files: [file], text };
+    if (navigator.canShare(payload)) {
+      try {
+        await navigator.share(payload);
+        return "shared";
+      } catch (err) {
+        // AbortError = user closed the sheet; every other error falls through
+        // to the link fallback.
+        if ((err as { name?: string })?.name === "AbortError") {
+          return "cancelled";
+        }
+      }
+    }
+  }
+
+  // Desktop fallback — open WhatsApp Web with just the text. Stickers can't
+  // be attached via the wa.me URL scheme, so we invite the user to download
+  // the sticker first (the Download button handles that).
+  if (typeof window !== "undefined") {
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    return "fallback";
+  }
+
+  return "unsupported";
+}

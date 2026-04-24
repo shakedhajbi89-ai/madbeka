@@ -1,5 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Heebo, Geist, Permanent_Marker } from "next/font/google";
+import {
+  Heebo,
+  Geist,
+  Permanent_Marker,
+  Rubik,
+  Secular_One,
+  Varela_Round,
+  Assistant,
+  Suez_One,
+  Karantina,
+  Frank_Ruhl_Libre,
+  Miriam_Libre,
+  Bellefair,
+} from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
 import "./globals.css";
@@ -24,6 +37,79 @@ const heebo = Heebo({
 const permanentMarker = Permanent_Marker({
   variable: "--font-permanent-marker",
   subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+});
+
+// The sticker editor lets users pick between several Hebrew display faces.
+// Each one is wired through next/font with its own CSS variable so the
+// canvas renderer can read `getComputedStyle(document.body).getPropertyValue`
+// or just use the variable directly in a CSS font stack.
+const rubik = Rubik({
+  variable: "--font-rubik",
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "700", "900"],
+  display: "swap",
+});
+const secularOne = Secular_One({
+  variable: "--font-secular",
+  subsets: ["hebrew", "latin"],
+  weight: "400",
+  display: "swap",
+});
+const varelaRound = Varela_Round({
+  variable: "--font-varela",
+  subsets: ["hebrew", "latin"],
+  weight: "400",
+  display: "swap",
+});
+const assistant = Assistant({
+  variable: "--font-assistant",
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "700", "800"],
+  display: "swap",
+});
+const suezOne = Suez_One({
+  variable: "--font-suez",
+  subsets: ["hebrew", "latin"],
+  weight: "400",
+  display: "swap",
+});
+
+// Hand-drawn / graffiti feel for Hebrew. Karantina is the closest Google
+// Fonts has to "marker on a wall" energy for Hebrew glyphs — use it when
+// you want a sticker to feel rebellious, young, street-art.
+const karantina = Karantina({
+  variable: "--font-karantina",
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+// Classical, elegant Hebrew serif — for formal / greeting-card vibes
+// ("לילה טוב", "מזל טוב", "שנה טובה"). Pairs with dark gradient styles.
+const frankRuhl = Frank_Ruhl_Libre({
+  variable: "--font-frank-ruhl",
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "700", "900"],
+  display: "swap",
+});
+
+// Modern Hebrew serif with a bold slab feel — great for single-word
+// punch stickers that still read seriously ("גאון", "מטורף", "אלוף").
+const miriamLibre = Miriam_Libre({
+  variable: "--font-miriam",
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "700"],
+  display: "swap",
+});
+
+// High-contrast elegant serif — display face, thin lines meet thick
+// verticals. Latin only, but kids love it for English slang stickers
+// ("rizz", "no cap"). If you drop in Hebrew it falls back to Heebo.
+const bellefair = Bellefair({
+  variable: "--font-bellefair",
+  subsets: ["hebrew", "latin"],
   weight: "400",
   display: "swap",
 });
@@ -67,6 +153,7 @@ export default function RootLayout({
       <html
         lang="he"
         dir="rtl"
+        suppressHydrationWarning
         className={cn(
           "h-full",
           "antialiased",
@@ -74,8 +161,34 @@ export default function RootLayout({
           "font-sans",
           geist.variable,
           permanentMarker.variable,
+          rubik.variable,
+          secularOne.variable,
+          varelaRound.variable,
+          assistant.variable,
+          suezOne.variable,
+          karantina.variable,
+          frankRuhl.variable,
+          miriamLibre.variable,
+          bellefair.variable,
         )}
       >
+        <head>
+          {/* Pre-hydration theme bootstrap — avoids a flash of light theme for
+              users who've picked dark. Runs sync before React renders. */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                try {
+                  var t = localStorage.getItem('madbeka:theme');
+                  if (t !== 'light' && t !== 'dark') {
+                    t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  }
+                  if (t === 'dark') document.documentElement.classList.add('dark');
+                } catch (e) {}
+              `,
+            }}
+          />
+        </head>
         <body className="min-h-full flex flex-col font-sans">
           <SplashScreen />
           {children}
