@@ -305,15 +305,19 @@ export default function TemplatesPage() {
             Order: [rail · preview · controls] — rail on far right so user's
             thumb (on mobile) or eye (on desktop) lands on presets first,
             preview dominates the middle, controls sit on the left. */}
-        <div className="grid gap-4 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)]">
+        {/* On desktop, lock the whole editor to viewport height. Each column
+            handles its own overflow internally, so the PAGE itself doesn't
+            scroll when the user browses through controls — the preview stays
+            visible at all times. On mobile, columns stack and flow naturally. */}
+        <div className="grid gap-4 lg:h-[calc(100vh-10rem)] lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:items-start">
           {/* Preset rail — moved to the far-right column (first in DOM in
               RTL context). Vertical strip on desktop, horizontal scroll on
               mobile. One tap loads a preset into the editor. */}
-          <aside className="lg:sticky lg:top-6">
+          <aside className="lg:flex lg:h-full lg:flex-col">
             <div className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               מוכנים
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 lg:max-h-[calc(100vh-120px)] lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-1 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
               {TEMPLATES.map((t) => (
                 <button
                   key={t.id}
@@ -327,8 +331,10 @@ export default function TemplatesPage() {
             </div>
           </aside>
 
-          {/* Live preview */}
-          <div className="mx-auto w-full max-w-[640px] space-y-3 lg:sticky lg:top-6">
+          {/* Live preview — fits inside the viewport-capped grid on desktop.
+              The canvas is aspect-square so it shrinks to match available
+              width/height. Buttons stay below it, all naturally visible. */}
+          <div className="mx-auto w-full max-w-[640px] space-y-3 lg:flex lg:h-full lg:flex-col lg:overflow-y-auto">
             <div className="checkerboard relative overflow-hidden rounded-3xl border border-gray-200 shadow-xl shadow-black/5 dark:border-gray-800 dark:shadow-black/30">
               <canvas
                 ref={previewRef}
@@ -398,8 +404,9 @@ export default function TemplatesPage() {
             )}
           </div>
 
-          {/* Controls */}
-          <div className="space-y-4">
+          {/* Controls — scroll internally on desktop so the preview column
+              stays in view while the user pages through all editor sections. */}
+          <div className="space-y-4 lg:h-full lg:overflow-y-auto lg:pl-1">
             {/* Text input */}
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <label className="mb-2 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
