@@ -598,46 +598,51 @@ function drawWordLayer(
     ctx.fillStyle = "#000000";
     ctx.fillText(text, x, y);
   } else if (style === "bubble") {
-    // 3D balloon letters. Thick purple outline, pink gradient fill with a
-    // lighter highlight strip near the top to simulate a glossy surface.
-    // Deep drop shadow gives the letters a floating, puffy feel.
-    ctx.shadowColor = "rgba(103, 58, 183, 0.45)";
-    ctx.shadowBlur = 22;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 10;
+    // True 3D balloon letters. The "3D feel" is achieved NOT by a
+    // separate highlight stroke (that reads as a random horizontal line
+    // instead of gloss), but by a multi-stop vertical gradient that
+    // bakes the highlight+shadow directly into the letter's body.
+    //
+    // Gradient top → bottom:
+    //   near-white (specular) → soft pink → main magenta → deep
+    //   burgundy shadow.
+    // This mimics a round inflated surface lit from directly above.
+    const bubbleMetrics = ctx.measureText(text);
+    const bAscent = bubbleMetrics.actualBoundingBoxAscent || fontSize * 0.7;
+    const bDescent = bubbleMetrics.actualBoundingBoxDescent || fontSize * 0.3;
 
-    // Outer purple balloon outline — extra thick.
-    ctx.lineWidth = Math.max(20, fontSize * 0.22);
+    // Floaty purple drop shadow.
+    ctx.shadowColor = "rgba(109, 40, 217, 0.55)";
+    ctx.shadowBlur = 26;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 14;
+
+    // Single thick purple outline — clean, no layered strokes.
+    ctx.lineWidth = Math.max(22, fontSize * 0.24);
     ctx.strokeStyle = "#6D28D9";
     ctx.strokeText(text, x, y);
 
     ctx.shadowColor = "transparent";
 
-    // Inner black contour for definition.
-    ctx.lineWidth = Math.max(8, fontSize * 0.08);
+    // Thin crisp black inner edge — makes the purple pop, still clean.
+    ctx.lineWidth = Math.max(3, fontSize * 0.025);
     ctx.strokeStyle = "#1E1B4B";
     ctx.strokeText(text, x, y);
 
-    // Main pink gradient fill — lighter top, darker bottom = 3D feel.
-    const bubbleMetrics = ctx.measureText(text);
-    const bAscent = bubbleMetrics.actualBoundingBoxAscent || fontSize * 0.7;
-    const bDescent = bubbleMetrics.actualBoundingBoxDescent || fontSize * 0.3;
+    // Main fill — 5-stop gradient with highlight+shadow built in.
     const bubbleGrad = ctx.createLinearGradient(
       0,
       y - bAscent,
       0,
       y + bDescent,
     );
-    bubbleGrad.addColorStop(0, "#FFB3D9");
-    bubbleGrad.addColorStop(0.45, "#FF6EB5");
-    bubbleGrad.addColorStop(1, "#E91E63");
+    bubbleGrad.addColorStop(0, "#FFFFFF"); // specular highlight
+    bubbleGrad.addColorStop(0.14, "#FFD7EB");
+    bubbleGrad.addColorStop(0.42, "#FF8CC4");
+    bubbleGrad.addColorStop(0.78, "#E91E63");
+    bubbleGrad.addColorStop(1, "#8B1B4A"); // deep shadow at bottom
     ctx.fillStyle = bubbleGrad;
     ctx.fillText(text, x, y);
-
-    // Glossy white highlight stripe near the top of the letters.
-    ctx.lineWidth = Math.max(4, fontSize * 0.04);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.strokeText(text, x, y - fontSize * 0.14);
   } else if (style === "graffiti") {
     // Tel Aviv street-wall. Heavy black outline, spray-gradient fill,
     // splatter particles, and drip lines running down from the bottom
