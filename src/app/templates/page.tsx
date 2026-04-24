@@ -305,7 +305,7 @@ export default function TemplatesPage() {
             Order: [rail · preview · controls] — rail on far right so user's
             thumb (on mobile) or eye (on desktop) lands on presets first,
             preview dominates the middle, controls sit on the left. */}
-        <div className="grid gap-4 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:items-start">
+        <div className="grid gap-4 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)]">
           {/* Preset rail — moved to the far-right column (first in DOM in
               RTL context). Vertical strip on desktop, horizontal scroll on
               mobile. One tap loads a preset into the editor. */}
