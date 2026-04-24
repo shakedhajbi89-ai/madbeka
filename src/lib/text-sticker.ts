@@ -218,9 +218,11 @@ const FALLBACKS: Record<TextStickerFont, string> = {
   "frank-ruhl": `"Frank Ruhl Libre", "Times New Roman", serif`,
   miriam: `"Miriam Libre", "Georgia", serif`,
   bellefair: `"Bellefair", "Times New Roman", serif`,
-  // Caveat is Latin-only; Hebrew chars fall through to Karantina so the
-  // hand-drawn feel is preserved even in Hebrew-only stickers.
-  caveat: `"Caveat", "Karantina", "Arial Black", sans-serif`,
+  // Caveat is Latin-only. Hebrew falls through to Varela Round — the
+  // softest rounded Hebrew font we ship, closest to a casual handwritten
+  // feel. Karantina is too "street-graffiti" for this style so it's not
+  // in the chain.
+  caveat: `"Caveat", "Varela Round", "Heebo", sans-serif`,
   // Rubik Wet Paint is Latin-only; Hebrew falls through to Karantina for
   // the street-art vibe, and to plain Rubik as a final safety net.
   "rubik-wet": `"Rubik Wet Paint", "Karantina", "Rubik", sans-serif`,
@@ -751,23 +753,31 @@ function drawWordLayer(
     ctx.fillStyle = pastelGrad;
     ctx.fillText(text, x, y);
   } else if (style === "handwriting") {
-    // Pen-on-paper. No heavy outline, thin dark ink stroke for a
-    // handwritten feel. Works best with the Caveat font (Latin) or
-    // Karantina (Hebrew fallback) — the renderer doesn't force a font,
-    // the editor auto-switches via STYLE_PREFERRED_FONT.
+    // Pen-on-paper. Caveat is Latin-only, so for Hebrew we fall through
+    // to Varela Round (our softest rounded Hebrew). A small forward
+    // skew mimics the natural lean of handwriting and helps the Hebrew
+    // fallback feel less "printed, block-letter". No heavy outline —
+    // just a thin ink contour + solid dark fill.
+    ctx.save();
+    // Shear transform for an italic-like lean. 0.12 radians ≈ 7° slant,
+    // enough to feel personal without being unreadable.
+    ctx.transform(1, 0, -0.12, 1, 0, 0);
+
     ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = 3;
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 2;
 
-    // Thin dark ink stroke wrapping the glyph for a nib-pen feel.
-    ctx.lineWidth = Math.max(2, fontSize * 0.018);
+    // Very thin ink contour.
+    ctx.lineWidth = Math.max(1.5, fontSize * 0.012);
     ctx.strokeStyle = "#1E293B";
     ctx.strokeText(text, x, y);
 
-    // Solid dark-ink fill — no gradient, keeps the pen-stroke purity.
+    // Solid dark-ink fill.
     ctx.fillStyle = "#0F172A";
     ctx.fillText(text, x, y);
+
+    ctx.restore();
   } else if (style === "neon") {
     const glow = "#00F5FF";
     for (const blur of [30, 20, 10]) {
