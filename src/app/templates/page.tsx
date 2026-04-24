@@ -9,6 +9,7 @@ import {
   FONT_OPTIONS,
   fontStack,
   generateTextSticker,
+  imageLayerDimensions,
   paintPreview,
   SKIN_TONE_EMOJIS,
   SKIN_TONE_OPTIONS,
@@ -16,6 +17,7 @@ import {
   TEMPLATES,
   wordLayerHalfExtent,
   type EmojiLayer,
+  type ImageLayer,
   type StickerLayer,
   type TemplateDef,
   type TextStickerAlign,
@@ -96,13 +98,41 @@ function makeEmojiLayer(base: string, refWordSize: number): EmojiLayer {
   };
 }
 
+function makeImageLayer(
+  src: string,
+  naturalWidth: number,
+  naturalHeight: number,
+): ImageLayer {
+  return {
+    id: uid("img"),
+    type: "image",
+    src,
+    aspectRatio: naturalWidth / Math.max(1, naturalHeight),
+    // Default to ~300px on the longer edge — big enough to be prominent
+    // but leaves room for text/emoji on top.
+    size: 320,
+    rotation: 0,
+    offsetX: 0,
+    offsetY: 0,
+  };
+}
+
 function layerPreview(layer: StickerLayer): string {
   if (layer.type === "emoji") {
     return layer.skin && SKIN_TONE_EMOJIS.has(layer.base)
       ? layer.base + layer.skin
       : layer.base;
   }
+  if (layer.type === "image") {
+    return "🖼️";
+  }
   return layer.text || "טקסט";
+}
+
+function layerTypeLabel(layer: StickerLayer): string {
+  if (layer.type === "emoji") return "אימוג'י";
+  if (layer.type === "image") return "תמונה";
+  return "מילה";
 }
 
 export default function TemplatesPage() {
@@ -123,6 +153,16 @@ export default function TemplatesPage() {
 
   const previewRef = useRef<HTMLCanvasElement | null>(null);
   const zoomRef = useRef<HTMLCanvasElement | null>(null);
+  // Cache of decoded image elements keyed by layer id. The canvas
+  // renderer reads from this synchronously (via paintPreview opts) so
+  // uploaded photos can paint every frame without re-decoding.
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  // Bumped whenever an uploaded image finishes decoding — forces the
+  // paint effect to re-run so the newly-ready image actually shows up.
+  const [imageTick, setImageTick] = useState(0);
+  // Hidden file input we trigger programmatically. `capture` attribute
+  // lets mobile devices jump straight to the camera.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Keep selectedId valid. If current selection disappears (layer deleted),
   // fall back to the top-most layer. If nothing is selected yet, pick the
@@ -141,6 +181,7 @@ export default function TemplatesPage() {
   );
   const selectedWord = selected?.type === "word" ? selected : null;
   const selectedEmoji = selected?.type === "emoji" ? selected : null;
+  const selectedImage = selected?.type === "image" ? selected : null;
   const selectedEmojiSupportsSkin =
     !!selectedEmoji && SKIN_TONE_EMOJIS.has(selectedEmoji.base);
 
@@ -152,10 +193,16 @@ export default function TemplatesPage() {
   // Repaint the preview canvas(es) whenever any layer changes.
   useEffect(() => {
     const shouldWatermark = !(status?.hasPaid === true);
-    const opts = { layers, watermark: shouldWatermark };
+    const opts = {
+      layers,
+      watermark: shouldWatermark,
+      imageCache: imageCache.current,
+    };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [layers, status?.hasPaid, zoomed]);
+    // imageTick is intentionally a dep: when a fresh upload decodes, it
+    // bumps the tick so this effect re-runs and paints the new image.
+  }, [layers, status?.hasPaid, zoomed, imageTick]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -245,6 +292,67 @@ export default function TemplatesPage() {
     setSelectedId(newLayer.id);
   }, [selectedWord?.style, selectedWord?.font]);
 
+  // Trigger the hidden file input. Mobile browsers use the `capture`
+  // attribute to offer camera access directly.
+  const openImagePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // When the user picks a file (or takes a photo), read it as a data
+  // URL, decode into an HTMLImageElement, cache it by layer id, and
+  // add a new ImageLayer to the stack. Sits on the BACK of the stack
+  // so text/emoji the user later adds naturally appear on top.
+  const handleImageFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Reset the input so selecting the same file twice still fires.
+      e.target.value = "";
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        setNotice("הקובץ חייב להיות תמונה.");
+        return;
+      }
+      // Generous 10MB cap — anything bigger is either a mistake or
+      // will choke the browser's image decoder anyway.
+      if (file.size > 10 * 1024 * 1024) {
+        setNotice("התמונה גדולה מדי. מקסימום 10MB.");
+        return;
+      }
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(reader.error);
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.readAsDataURL(file);
+        });
+
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("image decode failed"));
+          img.src = dataUrl;
+        });
+
+        const newLayer = makeImageLayer(
+          dataUrl,
+          img.naturalWidth,
+          img.naturalHeight,
+        );
+        imageCache.current.set(newLayer.id, img);
+        // Insert the image at the BOTTOM of the layer stack so any
+        // existing text/emoji stay in front of it (natural "photo with
+        // text overlay" default).
+        setLayers((prev) => [newLayer, ...prev]);
+        setSelectedId(newLayer.id);
+        setImageTick((t) => t + 1);
+        setNotice("");
+      } catch {
+        setNotice("לא הצלחנו לטעון את התמונה. נסה תמונה אחרת.");
+      }
+    },
+    [],
+  );
+
   // Preset click — replaces the entire stack with a single word layer from
   // the preset. This matches the prior behavior where a preset "reset" the
   // editor, but now explicitly means: wipe and start from this preset.
@@ -263,7 +371,11 @@ export default function TemplatesPage() {
   // ---------- Render pipeline (for download + share) ----------
   const renderCurrent = useCallback(async () => {
     const shouldWatermark = !(status?.hasPaid === true);
-    return generateTextSticker({ layers, watermark: shouldWatermark });
+    return generateTextSticker({
+      layers,
+      watermark: shouldWatermark,
+      imageCache: imageCache.current,
+    });
   }, [layers, status?.hasPaid]);
 
   // Filename and gallery label — use the first word layer's text if any,
@@ -357,6 +469,11 @@ export default function TemplatesPage() {
         if (l.type === "emoji") {
           const half = l.size / 2 + 8;
           hit = Math.abs(dx) <= half && Math.abs(dy) <= half;
+        } else if (l.type === "image") {
+          const { width, height } = imageLayerDimensions(l);
+          hit =
+            Math.abs(dx) <= width / 2 + 4 &&
+            Math.abs(dy) <= height / 2 + 4;
         } else {
           const { halfW, halfH } = wordLayerHalfExtent(l);
           hit = Math.abs(dx) <= halfW && Math.abs(dy) <= halfH;
@@ -416,10 +533,13 @@ export default function TemplatesPage() {
     [],
   );
 
-  const sizeSliderMin = selectedEmoji ? 40 : 40;
-  const sizeSliderMax = selectedEmoji ? 400 : 280;
-  const rotSliderMin = selectedEmoji ? -180 : -45;
-  const rotSliderMax = selectedEmoji ? 180 : 45;
+  // Per-layer-type slider ranges. Images can scale 80–500px (longer
+  // edge), emojis 40–400, words 40–280. Images and emojis rotate fully
+  // (±180°); words stay at ±45° so Hebrew remains readable.
+  const sizeSliderMin = selectedImage ? 80 : 40;
+  const sizeSliderMax = selectedImage ? 500 : selectedEmoji ? 400 : 280;
+  const rotSliderMin = selectedWord ? -45 : -180;
+  const rotSliderMax = selectedWord ? 45 : 180;
 
   return (
     <main className="relative flex min-h-screen flex-col items-center bg-gradient-to-b from-white to-gray-50 px-6 py-6 dark:from-gray-950 dark:to-gray-900 lg:h-screen lg:min-h-0 lg:overflow-hidden">
@@ -551,16 +671,37 @@ export default function TemplatesPage() {
                 ✕ to delete. "+ מילה חדשה" adds a new word layer. */}
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <div className="mb-3 flex items-center justify-between">
-                <button
-                  onClick={addWordLayer}
-                  className="rounded-xl bg-[color:var(--brand-green)]/10 px-3 py-1.5 text-xs font-semibold text-[color:var(--brand-green-dark)] transition hover:bg-[color:var(--brand-green)]/20 dark:text-[color:var(--brand-green)]"
-                >
-                  + מילה חדשה
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={addWordLayer}
+                    className="rounded-xl bg-[color:var(--brand-green)]/10 px-3 py-1.5 text-xs font-semibold text-[color:var(--brand-green-dark)] transition hover:bg-[color:var(--brand-green)]/20 dark:text-[color:var(--brand-green)]"
+                  >
+                    + מילה
+                  </button>
+                  <button
+                    onClick={openImagePicker}
+                    className="rounded-xl bg-pink-500/10 px-3 py-1.5 text-xs font-semibold text-pink-600 transition hover:bg-pink-500/20 dark:text-pink-400"
+                    title="העלה או צלם תמונה שתהפוך לשכבה בקנבס"
+                  >
+                    📷 תמונה
+                  </button>
+                </div>
                 <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   שכבות ({layers.length})
                 </label>
               </div>
+              {/* Hidden file input — triggered by the "📷 תמונה" button
+                  above. `accept=image/*` filters to photos only;
+                  `capture=environment` lets mobile pick the rear camera
+                  directly when available (ignored on desktop). */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleImageFile}
+                className="hidden"
+              />
               {/* Render layers TOP-FIRST (visually top = front = last array
                   index). Makes the list feel like a Photoshop layer stack. */}
               <div className="space-y-1.5">
@@ -621,7 +762,7 @@ export default function TemplatesPage() {
                             {layerPreview(l)}
                           </span>
                           <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                            {l.type === "word" ? "מילה" : "אימוג'י"}
+                            {layerTypeLabel(l)}
                           </span>
                         </button>
                       </div>
@@ -765,7 +906,7 @@ export default function TemplatesPage() {
                         {selected.size}px
                       </span>
                       <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        גודל {selected.type === "word" ? "המילה" : "האימוג׳י"}
+                        גודל {selected.type === "word" ? "המילה" : selected.type === "image" ? "התמונה" : "האימוג׳י"}
                       </label>
                     </div>
                     <input
@@ -788,7 +929,7 @@ export default function TemplatesPage() {
                         {selected.rotation}°
                       </span>
                       <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        זווית {selected.type === "word" ? "המילה" : "האימוג׳י"}
+                        זווית {selected.type === "word" ? "המילה" : selected.type === "image" ? "התמונה" : "האימוג׳י"}
                       </label>
                     </div>
                     <input

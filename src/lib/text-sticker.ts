@@ -98,13 +98,57 @@ export interface EmojiLayer {
   offsetY: number;
 }
 
-export type StickerLayer = WordLayer | EmojiLayer;
+/**
+ * One uploaded photo / camera capture on the canvas. Kept as a data URL
+ * (base64-encoded PNG/JPEG) so the layer is self-contained — no external
+ * references, no storage needed. The caller maintains an imageCache of
+ * already-decoded HTMLImageElements keyed by layer.id so the renderer
+ * can draw them synchronously without awaiting decode each paint.
+ */
+export interface ImageLayer {
+  id: string;
+  type: "image";
+  /** Data URL (image/png or image/jpeg) for the uploaded photo. */
+  src: string;
+  /** width / height of the ORIGINAL image, captured at upload time so
+   *  we can maintain aspect ratio as the user resizes. */
+  aspectRatio: number;
+  /** The longer-edge dimension in canvas 512-space. The shorter edge
+   *  is derived via aspectRatio so the image never skews. 80–500. */
+  size: number;
+  /** Rotation in degrees. ±180. */
+  rotation: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export type StickerLayer = WordLayer | EmojiLayer | ImageLayer;
 
 export interface MultiLayerOptions {
   /** Layers in DRAW order — first = back, last = front (on top). */
   layers: StickerLayer[];
+  /** Cache of decoded images keyed by the owning ImageLayer's id. The
+   *  editor maintains this as user uploads photos; renderer uses it so
+   *  it can drawImage synchronously without decoding each paint. */
+  imageCache?: Map<string, HTMLImageElement>;
   /** Watermark-free output (paid users). */
   watermark?: boolean;
+}
+
+/**
+ * Derive the on-canvas width and height of an image layer from its
+ * stored `size` (longer edge) and `aspectRatio`. Shared between the
+ * renderer and the pointer hit-tester so both agree on bounds.
+ */
+export function imageLayerDimensions(layer: ImageLayer): {
+  width: number;
+  height: number;
+} {
+  const size = Math.max(40, Math.min(500, layer.size));
+  if (layer.aspectRatio >= 1) {
+    return { width: size, height: size / layer.aspectRatio };
+  }
+  return { width: size * layer.aspectRatio, height: size };
 }
 
 /**
@@ -853,6 +897,42 @@ function drawEmojiLayer(
 }
 
 /**
+ * Draw a single image layer — an uploaded photo / camera snap. The
+ * HTMLImageElement comes from the caller's imageCache (keyed by
+ * layer.id). If it's not loaded yet (fresh upload still decoding) we
+ * just skip the draw — next repaint will include it.
+ */
+function drawImageLayer(
+  ctx: CanvasRenderingContext2D,
+  layer: ImageLayer,
+  canvasSize: number,
+  imageCache?: Map<string, HTMLImageElement>,
+) {
+  const img = imageCache?.get(layer.id);
+  if (!img || !img.complete || img.naturalWidth === 0) return;
+
+  const { width, height } = imageLayerDimensions(layer);
+
+  ctx.save();
+  ctx.translate(
+    canvasSize / 2 + layer.offsetX,
+    canvasSize / 2 + layer.offsetY,
+  );
+  if (layer.rotation !== 0) {
+    ctx.rotate((layer.rotation * Math.PI) / 180);
+  }
+
+  // Soft drop shadow so a photo sticker reads cleanly on any chat wallpaper.
+  ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 4;
+
+  ctx.drawImage(img, -width / 2, -height / 2, width, height);
+  ctx.restore();
+}
+
+/**
  * Render a 512×512 canvas by drawing each layer in order. First layer in
  * the array ends up in the back, last ends up on top.
  */
@@ -864,6 +944,8 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: MultiLayerOptions) {
       drawWordLayer(ctx, layer, size);
     } else if (layer.type === "emoji") {
       drawEmojiLayer(ctx, layer, size);
+    } else if (layer.type === "image") {
+      drawImageLayer(ctx, layer, size, opts.imageCache);
     }
   }
 }
