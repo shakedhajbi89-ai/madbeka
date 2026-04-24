@@ -97,6 +97,66 @@ export function defaultEmojiSize(fontSize: number): number {
   return Math.round(fontSize * 0.9);
 }
 
+/**
+ * Base emojis in our picker that accept a Fitzpatrick skin-tone modifier.
+ * Covers hand gestures, body parts, and human-figure activity emojis —
+ * anything WhatsApp lets you long-press to recolor. Kept as a literal set
+ * because the Unicode spec ranges are scattered and a runtime test is
+ * expensive; easier to enumerate the ones we actually ship in the picker.
+ */
+export const SKIN_TONE_EMOJIS: ReadonlySet<string> = new Set([
+  // Hands
+  "👋", "🤚", "🖐️", "✋", "🖖", "🫱", "🫲", "🫳", "🫴",
+  "👌", "🤌", "🤏", "✌️", "🤞", "🫰", "🤟", "🤘", "🤙",
+  "👈", "👉", "👆", "🖕", "👇", "☝️", "🫵",
+  "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "🫶",
+  "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪",
+  // Body parts
+  "🦵", "🦶", "👂", "🦻", "👃",
+  // Activity emojis with humans
+  "🏋️", "🤸", "🤺", "⛹️", "🤾", "🏌️", "🏇", "🧘",
+  "🏄", "🏊", "🤽", "🚣", "🧗", "🚵", "🚴", "🤹",
+]);
+
+/**
+ * The six WhatsApp-style skin tone options. id = the Unicode modifier to
+ * append after the base emoji ('' = default yellow, no modifier). swatch
+ * is the CSS color used for the picker chip so the user can see what they
+ * are selecting before selecting it.
+ */
+export const SKIN_TONE_OPTIONS: {
+  id: string;
+  label: string;
+  swatch: string;
+}[] = [
+  { id: "", label: "ברירת מחדל", swatch: "#FCD34D" },
+  { id: "🏻", label: "בהיר ביותר", swatch: "#F5CFA0" },
+  { id: "🏼", label: "בהיר", swatch: "#E0B088" },
+  { id: "🏽", label: "בינוני", swatch: "#C69076" },
+  { id: "🏾", label: "כהה", swatch: "#8D5524" },
+  { id: "🏿", label: "כהה ביותר", swatch: "#3D2817" },
+];
+
+/**
+ * Apply a skin tone modifier to every skin-tone-capable emoji in a string.
+ * Iterates by grapheme so multi-codepoint emojis (with variation selectors,
+ * ZWJ sequences) are handled correctly.
+ */
+export function applySkinTone(emojiStr: string, skin: string): string {
+  if (!emojiStr || !skin) return emojiStr;
+  // Intl.Segmenter is available in all modern browsers (and Node 16+).
+  // Fallback: naive char-by-char if Segmenter is missing.
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    const seg = new Intl.Segmenter();
+    let out = "";
+    for (const { segment } of seg.segment(emojiStr)) {
+      out += SKIN_TONE_EMOJIS.has(segment) ? segment + skin : segment;
+    }
+    return out;
+  }
+  return emojiStr;
+}
+
 const GRADIENTS: Record<
   "green" | "sunset" | "night",
   [string, string]

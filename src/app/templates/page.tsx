@@ -4,12 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UserButton, useAuth, SignUpButton } from "@clerk/nextjs";
 import {
+  applySkinTone,
   defaultEmojiSize,
   EMOJI_CATEGORIES,
   FONT_OPTIONS,
   fontStack,
   generateTextSticker,
   paintPreview,
+  SKIN_TONE_EMOJIS,
+  SKIN_TONE_OPTIONS,
   TEMPLATES,
   type TemplateDef,
   type TextStickerAlign,
@@ -69,6 +72,9 @@ export default function TemplatesPage() {
   // Layer stacking: when true, the emoji is drawn BEHIND the word (the
   // word covers it). Default false = emoji on top.
   const [emojiBehind, setEmojiBehind] = useState(false);
+  // Fitzpatrick skin-tone modifier — '' means default yellow, otherwise
+  // one of 🏻 🏼 🏽 🏾 🏿 which gets appended to skin-tone-capable emojis.
+  const [emojiSkin, setEmojiSkin] = useState("");
   // Which layer the size/rotation controls currently affect.
   const [selectedLayer, setSelectedLayer] = useState<SelectedLayer>("word");
   const [style, setStyle] = useState<TextStickerStyle>("classic");
@@ -78,6 +84,28 @@ export default function TemplatesPage() {
   const [align, setAlign] = useState<TextStickerAlign>("center");
   // User-drag offset of the main WORD inside the 512×512 canvas. (0,0) = centered.
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  // Emoji string with the current skin tone baked in — that's what the
+  // canvas renderer actually draws. The raw `emoji` state stays "base"
+  // so changing skin tone is a pure composition, no destructive edits.
+  const composedEmoji = useMemo(
+    () => applySkinTone(emoji, emojiSkin),
+    [emoji, emojiSkin],
+  );
+
+  // Does the current emoji contain at least one skin-tone-capable glyph?
+  // Drives whether we show the skin-tone palette to the user.
+  const hasSkinToneCapable = useMemo(() => {
+    if (!emoji) return false;
+    if (typeof Intl === "undefined" || typeof Intl.Segmenter !== "function") {
+      return SKIN_TONE_EMOJIS.has(emoji);
+    }
+    const seg = new Intl.Segmenter();
+    for (const { segment } of seg.segment(emoji)) {
+      if (SKIN_TONE_EMOJIS.has(segment)) return true;
+    }
+    return false;
+  }, [emoji]);
 
   const previewRef = useRef<HTMLCanvasElement | null>(null);
   const zoomRef = useRef<HTMLCanvasElement | null>(null);
@@ -96,7 +124,7 @@ export default function TemplatesPage() {
     const shouldWatermark = !(status?.hasPaid === true);
     const opts = {
       text: text || " ",
-      emoji,
+      emoji: composedEmoji,
       emojiOffsetX: emojiOffset.x,
       emojiOffsetY: emojiOffset.y,
       emojiSize,
@@ -113,7 +141,7 @@ export default function TemplatesPage() {
     };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
+  }, [text, composedEmoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -149,7 +177,7 @@ export default function TemplatesPage() {
     const shouldWatermark = !(status?.hasPaid === true);
     return generateTextSticker({
       text: text || " ",
-      emoji,
+      emoji: composedEmoji,
       emojiOffsetX: emojiOffset.x,
       emojiOffsetY: emojiOffset.y,
       emojiSize,
@@ -164,7 +192,7 @@ export default function TemplatesPage() {
       offsetY: offset.y,
       watermark: shouldWatermark,
     });
-  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
+  }, [text, composedEmoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
 
   const onDownload = useCallback(async () => {
     if (!isSignedIn) {
@@ -227,6 +255,7 @@ export default function TemplatesPage() {
     setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
     setEmojiRotation(0);
     setEmojiBehind(false);
+    setEmojiSkin("");
     setSelectedLayer("word");
     setStyle(t.style);
     setFont(t.font);
@@ -512,12 +541,13 @@ export default function TemplatesPage() {
                         setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
                         setEmojiRotation(0);
                         setEmojiBehind(false);
+                        setEmojiSkin("");
                         setSelectedLayer("word");
                       }}
                       className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
                       title="הסר אימוג'י"
                     >
-                      <span className="text-lg leading-none">{emoji}</span>
+                      <span className="text-lg leading-none">{composedEmoji || emoji}</span>
                       <span className="text-xs">✕ הסר</span>
                     </button>
                     <button
@@ -541,6 +571,32 @@ export default function TemplatesPage() {
                   <p className="mb-3 text-right text-[11px] text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
                     💡 גרור את האימוג'י על התצוגה למיקום חופשי — כל מקום שתרצה
                   </p>
+                  {/* Skin tone palette — only appears when the picked emoji
+                      actually accepts a Fitzpatrick modifier. Pick any skin
+                      tone, the emoji on canvas recolors instantly. */}
+                  {hasSkinToneCapable && (
+                    <div className="mb-3 flex items-center justify-end gap-2">
+                      <div className="flex gap-1.5 rounded-xl border border-gray-200 bg-gray-50 p-1.5 dark:border-gray-700 dark:bg-gray-800">
+                        {SKIN_TONE_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.id || "default"}
+                            onClick={() => setEmojiSkin(opt.id)}
+                            title={opt.label}
+                            aria-label={opt.label}
+                            className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${
+                              emojiSkin === opt.id
+                                ? "border-[color:var(--brand-green)] ring-2 ring-[color:var(--brand-green)]/30 scale-110"
+                                : "border-white dark:border-gray-600"
+                            }`}
+                            style={{ backgroundColor: opt.swatch }}
+                          />
+                        ))}
+                      </div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                        גוון עור
+                      </label>
+                    </div>
+                  )}
                   {/* Layer stacking toggle — front vs. behind the word. */}
                   <div className="mb-3 flex items-center justify-end gap-2">
                     <div className="flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
