@@ -114,10 +114,13 @@ const bellefair = Bellefair({
   display: "swap",
 });
 
+const SITE_TITLE = "Madbeka — מדבקות וואטסאפ בעברית";
+const SITE_DESCRIPTION =
+  "עורך מדבקות וואטסאפ הישראלי הכי מהיר. כתוב בעברית, הוסף אימוג'ים, גרור כל אחד לבד, שלח לוואטסאפ — בלי אפליקציה, בלי הרשמה.";
+
 export const metadata: Metadata = {
-  title: "Madbeka — מתמונה למדבקה תוך 10 שניות",
-  description:
-    "מחולל המדבקות הישראלי הכי מהיר. הופכים תמונה למדבקת וואטסאפ תוך 10 שניות. עברית מלאה, ביטויים ישראליים, בלי חיכוך.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   metadataBase: new URL(PUBLIC_URL),
   manifest: "/manifest.webmanifest",
   // iOS Safari reads these when the user taps "Add to Home Screen".
@@ -125,6 +128,21 @@ export const metadata: Metadata = {
     capable: true,
     title: "Madbeka",
     statusBarStyle: "default",
+  },
+  openGraph: {
+    type: "website",
+    locale: "he_IL",
+    url: PUBLIC_URL,
+    siteName: "Madbeka",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    // Image itself comes from src/app/opengraph-image.tsx (Next auto-wires it).
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    // Image comes from src/app/twitter-image.tsx.
   },
 };
 
