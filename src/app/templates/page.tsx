@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UserButton, useAuth, SignUpButton } from "@clerk/nextjs";
 import {
-  applySkinTone,
   defaultEmojiSize,
   EMOJI_CATEGORIES,
   FONT_OPTIONS,
@@ -14,10 +13,14 @@ import {
   SKIN_TONE_EMOJIS,
   SKIN_TONE_OPTIONS,
   TEMPLATES,
+  wordLayerHalfExtent,
+  type EmojiLayer,
+  type StickerLayer,
   type TemplateDef,
   type TextStickerAlign,
   type TextStickerFont,
   type TextStickerStyle,
+  type WordLayer,
 } from "@/lib/text-sticker";
 import { downloadBlob, shareStickerToWhatsApp } from "@/lib/sticker-utils";
 import { saveToGallery } from "@/lib/sticker-gallery";
@@ -48,100 +51,108 @@ const ALIGN_OPTIONS: { id: TextStickerAlign; label: string; icon: string }[] = [
   { id: "left", label: "שמאל", icon: "⇤" },
 ];
 
-// Initial position for the emoji when the user first picks one — places
-// it above the word so it's immediately visible (not hidden behind the
-// word). User can drag it anywhere from there.
-const DEFAULT_EMOJI_OFFSET = { x: 0, y: -130 };
 const DEFAULT_WORD_SIZE = 160;
-// The "which object do the sliders affect" switch. Word is the default
-// since that's what exists from the moment the page loads.
-type SelectedLayer = "word" | "emoji";
+const DEFAULT_EMOJI_OFFSET_Y = -130;
+
+// Stable ID generator. Using crypto.randomUUID when available (all modern
+// browsers + node), fallback to a counter for SSR robustness.
+let idCounter = 0;
+function uid(prefix: string): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  idCounter += 1;
+  return `${prefix}-${idCounter}-${Date.now()}`;
+}
+
+function makeWordLayer(props?: Partial<WordLayer>): WordLayer {
+  return {
+    id: props?.id ?? uid("w"),
+    type: "word",
+    text: props?.text ?? "יאללה",
+    font: props?.font ?? "marker",
+    style: props?.style ?? "classic",
+    size: props?.size ?? DEFAULT_WORD_SIZE,
+    rotation: props?.rotation ?? 0,
+    align: props?.align ?? "center",
+    offsetX: props?.offsetX ?? 0,
+    offsetY: props?.offsetY ?? 0,
+  };
+}
+
+function makeEmojiLayer(base: string, refWordSize: number): EmojiLayer {
+  return {
+    id: uid("e"),
+    type: "emoji",
+    base,
+    skin: "",
+    size: defaultEmojiSize(refWordSize),
+    rotation: 0,
+    offsetX: 0,
+    offsetY: DEFAULT_EMOJI_OFFSET_Y,
+  };
+}
+
+function layerPreview(layer: StickerLayer): string {
+  if (layer.type === "emoji") {
+    return layer.skin && SKIN_TONE_EMOJIS.has(layer.base)
+      ? layer.base + layer.skin
+      : layer.base;
+  }
+  return layer.text || "טקסט";
+}
 
 export default function TemplatesPage() {
   const { isSignedIn, isLoaded } = useAuth();
 
-  // Editor state
-  const [text, setText] = useState("יאללה");
-  // Emoji lives in its own state with its own position, size, and rotation
-  // — it's a fully separate draggable layer on the canvas. Size and
-  // rotation can be tuned independently from the word.
-  const [emoji, setEmoji] = useState("");
-  const [emojiOffset, setEmojiOffset] = useState(DEFAULT_EMOJI_OFFSET);
-  const [emojiSize, setEmojiSize] = useState(defaultEmojiSize(DEFAULT_WORD_SIZE));
-  const [emojiRotation, setEmojiRotation] = useState(0);
-  // Layer stacking: when true, the emoji is drawn BEHIND the word (the
-  // word covers it). Default false = emoji on top.
-  const [emojiBehind, setEmojiBehind] = useState(false);
-  // Fitzpatrick skin-tone modifier — '' means default yellow, otherwise
-  // one of 🏻 🏼 🏽 🏾 🏿 which gets appended to skin-tone-capable emojis.
-  const [emojiSkin, setEmojiSkin] = useState("");
-  // Which layer the size/rotation controls currently affect.
-  const [selectedLayer, setSelectedLayer] = useState<SelectedLayer>("word");
-  const [style, setStyle] = useState<TextStickerStyle>("classic");
-  const [font, setFont] = useState<TextStickerFont>("marker");
-  const [size, setSize] = useState(DEFAULT_WORD_SIZE);
-  const [rotation, setRotation] = useState(0);
-  const [align, setAlign] = useState<TextStickerAlign>("center");
-  // User-drag offset of the main WORD inside the 512×512 canvas. (0,0) = centered.
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // Layer state — the canvas is composed of zero-or-more layers, each fully
+  // self-contained. Initial stack: one word layer "יאללה" ready for the
+  // user to start from. The array order is the DRAW order: index 0 = back,
+  // last index = front (on top).
+  const [layers, setLayers] = useState<StickerLayer[]>(() => [makeWordLayer()]);
+  const [selectedId, setSelectedId] = useState<string | null>(() => null);
 
-  // Emoji string with the current skin tone baked in — that's what the
-  // canvas renderer actually draws. The raw `emoji` state stays "base"
-  // so changing skin tone is a pure composition, no destructive edits.
-  const composedEmoji = useMemo(
-    () => applySkinTone(emoji, emojiSkin),
-    [emoji, emojiSkin],
-  );
-
-  // Does the current emoji contain at least one skin-tone-capable glyph?
-  // Drives whether we show the skin-tone palette to the user.
-  const hasSkinToneCapable = useMemo(() => {
-    if (!emoji) return false;
-    if (typeof Intl === "undefined" || typeof Intl.Segmenter !== "function") {
-      return SKIN_TONE_EMOJIS.has(emoji);
-    }
-    const seg = new Intl.Segmenter();
-    for (const { segment } of seg.segment(emoji)) {
-      if (SKIN_TONE_EMOJIS.has(segment)) return true;
-    }
-    return false;
-  }, [emoji]);
-
-  const previewRef = useRef<HTMLCanvasElement | null>(null);
-  const zoomRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<UserStatus | null>(null);
   const [working, setWorking] = useState<"download" | "share" | null>(null);
   const [notice, setNotice] = useState("");
   const [zoomed, setZoomed] = useState(false);
-  // Which emoji category is currently expanded in the picker panel. null =
-  // nothing open yet (clean UI), string = id of the open category.
   const [openEmojiCat, setOpenEmojiCat] = useState<string | null>(null);
 
-  // Repaint both preview canvases whenever any editor input changes.
-  // The zoom modal's canvas mirrors the main one so when you open zoom,
-  // you see exactly the current state big.
+  const previewRef = useRef<HTMLCanvasElement | null>(null);
+  const zoomRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Keep selectedId valid. If current selection disappears (layer deleted),
+  // fall back to the top-most layer. If nothing is selected yet, pick the
+  // last layer so the controls have something to drive.
+  useEffect(() => {
+    if (!layers.length) return;
+    if (!selectedId || !layers.some((l) => l.id === selectedId)) {
+      setSelectedId(layers[layers.length - 1].id);
+    }
+  }, [layers, selectedId]);
+
+  // Derived: the currently selected layer and its type-narrowed views.
+  const selected = useMemo(
+    () => layers.find((l) => l.id === selectedId) ?? null,
+    [layers, selectedId],
+  );
+  const selectedWord = selected?.type === "word" ? selected : null;
+  const selectedEmoji = selected?.type === "emoji" ? selected : null;
+  const selectedEmojiSupportsSkin =
+    !!selectedEmoji && SKIN_TONE_EMOJIS.has(selectedEmoji.base);
+
+  // Reference word size for default emoji scale on new pick. Use the first
+  // word in the stack if there is one; otherwise the default constant.
+  const referenceWordSize =
+    layers.find((l) => l.type === "word")?.size ?? DEFAULT_WORD_SIZE;
+
+  // Repaint the preview canvas(es) whenever any layer changes.
   useEffect(() => {
     const shouldWatermark = !(status?.hasPaid === true);
-    const opts = {
-      text: text || " ",
-      emoji: composedEmoji,
-      emojiOffsetX: emojiOffset.x,
-      emojiOffsetY: emojiOffset.y,
-      emojiSize,
-      emojiRotation,
-      emojiBehindText: emojiBehind,
-      style,
-      font,
-      size,
-      rotation,
-      align,
-      offsetX: offset.x,
-      offsetY: offset.y,
-      watermark: shouldWatermark,
-    };
+    const opts = { layers, watermark: shouldWatermark };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [text, composedEmoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
+  }, [layers, status?.hasPaid, zoomed]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -173,26 +184,94 @@ export default function TemplatesPage() {
     };
   }, [isSignedIn]);
 
+  // ---------- Layer mutation helpers ----------
+  const updateLayer = useCallback(
+    (id: string, patch: Partial<WordLayer> & Partial<EmojiLayer>) => {
+      setLayers((prev) =>
+        prev.map((l) => (l.id === id ? ({ ...l, ...patch } as StickerLayer) : l)),
+      );
+    },
+    [],
+  );
+
+  const patchSelected = useCallback(
+    (patch: Partial<WordLayer> & Partial<EmojiLayer>) => {
+      if (!selectedId) return;
+      updateLayer(selectedId, patch);
+    },
+    [selectedId, updateLayer],
+  );
+
+  const deleteLayer = useCallback((id: string) => {
+    setLayers((prev) => {
+      const next = prev.filter((l) => l.id !== id);
+      // Keep at least one layer — empty canvas is a dead end.
+      return next.length ? next : [makeWordLayer({ text: "טקסט" })];
+    });
+  }, []);
+
+  const moveLayer = useCallback((id: string, direction: "front" | "back") => {
+    setLayers((prev) => {
+      const i = prev.findIndex((l) => l.id === id);
+      if (i < 0) return prev;
+      const j = direction === "front" ? i + 1 : i - 1;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }, []);
+
+  const addEmojiLayer = useCallback(
+    (base: string) => {
+      const newLayer = makeEmojiLayer(base, referenceWordSize);
+      setLayers((prev) => [...prev, newLayer]);
+      setSelectedId(newLayer.id);
+    },
+    [referenceWordSize],
+  );
+
+  const addWordLayer = useCallback(() => {
+    const newLayer = makeWordLayer({
+      text: "טקסט חדש",
+      offsetY: 100,
+      style: selectedWord?.style ?? "classic",
+      font: selectedWord?.font ?? "marker",
+    });
+    setLayers((prev) => [...prev, newLayer]);
+    setSelectedId(newLayer.id);
+  }, [selectedWord?.style, selectedWord?.font]);
+
+  // Preset click — replaces the entire stack with a single word layer from
+  // the preset. This matches the prior behavior where a preset "reset" the
+  // editor, but now explicitly means: wipe and start from this preset.
+  const applyTemplate = useCallback((t: TemplateDef) => {
+    const newLayer = makeWordLayer({
+      text: t.text,
+      style: t.style,
+      font: t.font,
+      rotation: t.rotation ?? 0,
+    });
+    setLayers([newLayer]);
+    setSelectedId(newLayer.id);
+    setNotice("");
+  }, []);
+
+  // ---------- Render pipeline (for download + share) ----------
   const renderCurrent = useCallback(async () => {
     const shouldWatermark = !(status?.hasPaid === true);
-    return generateTextSticker({
-      text: text || " ",
-      emoji: composedEmoji,
-      emojiOffsetX: emojiOffset.x,
-      emojiOffsetY: emojiOffset.y,
-      emojiSize,
-      emojiRotation,
-      emojiBehindText: emojiBehind,
-      style,
-      font,
-      size,
-      rotation,
-      align,
-      offsetX: offset.x,
-      offsetY: offset.y,
-      watermark: shouldWatermark,
-    });
-  }, [text, composedEmoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
+    return generateTextSticker({ layers, watermark: shouldWatermark });
+  }, [layers, status?.hasPaid]);
+
+  // Filename and gallery label — use the first word layer's text if any,
+  // else the first emoji's preview, else a safe fallback.
+  const primaryLabel = useMemo(() => {
+    const w = layers.find((l) => l.type === "word");
+    if (w && w.text.trim()) return w.text.trim();
+    const e = layers.find((l) => l.type === "emoji");
+    if (e) return e.base;
+    return "sticker";
+  }, [layers]);
 
   const onDownload = useCallback(async () => {
     if (!isSignedIn) {
@@ -215,21 +294,21 @@ export default function TemplatesPage() {
         /* ignore */
       }
       const blob = await renderCurrent();
-      downloadBlob(blob, `madbeka-${text || "text"}.webp`);
-      void saveToGallery(blob, text);
+      downloadBlob(blob, `madbeka-${primaryLabel}.webp`);
+      void saveToGallery(blob, primaryLabel);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "משהו השתבש בהורדה.");
     } finally {
       setWorking(null);
     }
-  }, [isSignedIn, renderCurrent, text]);
+  }, [isSignedIn, renderCurrent, primaryLabel]);
 
   const onShare = useCallback(async () => {
     setWorking("share");
     setNotice("");
     try {
       const blob = await renderCurrent();
-      void saveToGallery(blob, text);
+      void saveToGallery(blob, primaryLabel);
       const result = await shareStickerToWhatsApp(blob);
       if (result === "shared") {
         setNotice(
@@ -245,35 +324,11 @@ export default function TemplatesPage() {
     } finally {
       setWorking(null);
     }
-  }, [renderCurrent, text]);
+  }, [renderCurrent, primaryLabel]);
 
-  /** Load a preset into the editor — keeps user's current text choices tidy. */
-  const applyTemplate = useCallback((t: TemplateDef) => {
-    setText(t.text);
-    setEmoji("");
-    setEmojiOffset(DEFAULT_EMOJI_OFFSET);
-    setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
-    setEmojiRotation(0);
-    setEmojiBehind(false);
-    setEmojiSkin("");
-    setSelectedLayer("word");
-    setStyle(t.style);
-    setFont(t.font);
-    setRotation(t.rotation ?? 0);
-    setAlign("center");
-    setSize(DEFAULT_WORD_SIZE);
-    setOffset({ x: 0, y: 0 });
-    setNotice("");
-  }, []);
-
-  // Drag-to-move on the preview canvas. Pointer events unify mouse + touch
-  // so iPhone and desktop both work with the same handlers. On pointer down
-  // we hit-test: is the user grabbing the emoji (if present) or the word?
-  // Whichever got hit becomes the drag target and its offset gets updated
-  // on subsequent moves. This is what lets the user pick up JUST the emoji
-  // and drag it anywhere, independent of the word.
+  // ---------- Drag handlers (hit test + drag offset per layer) ----------
   const dragStart = useRef<{
-    target: "word" | "emoji";
+    id: string;
     pointerX: number;
     pointerY: number;
     startX: number;
@@ -285,41 +340,41 @@ export default function TemplatesPage() {
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const el = e.currentTarget;
       const rect = el.getBoundingClientRect();
-      // CSS pixel → internal 512px scale factor. Canvas is rendered at
-      // rect.width CSS pixels, but its coordinate space is 512px.
       const scale = rect.width > 0 ? 512 / rect.width : 1;
-
-      // Pointer coords in canvas 512-space, origin at canvas CENTER.
+      // Pointer coords in canvas 512-space with origin at CENTER.
       const cx = (e.clientX - rect.left) * scale - 256;
       const cy = (e.clientY - rect.top) * scale - 256;
 
-      // Hit-test emoji first (it's drawn on top of the word, so it wins).
-      // Its bounding box is emojiSize × emojiSize centered at emojiOffset.
-      // We add a small touch-target pad for fingers. Clicking on a layer
-      // also SELECTS it so the size/rotation sliders act on it.
-      let target: "word" | "emoji" = "word";
-      if (emoji) {
-        const half = emojiSize / 2 + 8;
-        if (
-          Math.abs(cx - emojiOffset.x) <= half &&
-          Math.abs(cy - emojiOffset.y) <= half
-        ) {
-          target = "emoji";
+      // Hit-test TOP-DOWN (last array index = visually on top = wins first).
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const l = layers[i];
+        const dx = cx - l.offsetX;
+        const dy = cy - l.offsetY;
+        let hit = false;
+        if (l.type === "emoji") {
+          const half = l.size / 2 + 8;
+          hit = Math.abs(dx) <= half && Math.abs(dy) <= half;
+        } else {
+          const { halfW, halfH } = wordLayerHalfExtent(l);
+          hit = Math.abs(dx) <= halfW && Math.abs(dy) <= halfH;
+        }
+        if (hit) {
+          setSelectedId(l.id);
+          dragStart.current = {
+            id: l.id,
+            pointerX: e.clientX,
+            pointerY: e.clientY,
+            startX: l.offsetX,
+            startY: l.offsetY,
+            scale,
+          };
+          el.setPointerCapture(e.pointerId);
+          return;
         }
       }
-      setSelectedLayer(target);
-
-      dragStart.current = {
-        target,
-        pointerX: e.clientX,
-        pointerY: e.clientY,
-        startX: target === "emoji" ? emojiOffset.x : offset.x,
-        startY: target === "emoji" ? emojiOffset.y : offset.y,
-        scale,
-      };
-      el.setPointerCapture(e.pointerId);
+      // Empty-space click: do nothing. Keeps current selection, no drag.
     },
-    [emoji, emojiOffset.x, emojiOffset.y, offset.x, offset.y, emojiSize],
+    [layers],
   );
 
   const onPointerMoveCanvas = useCallback(
@@ -328,17 +383,13 @@ export default function TemplatesPage() {
       if (!start) return;
       const dx = (e.clientX - start.pointerX) * start.scale;
       const dy = (e.clientY - start.pointerY) * start.scale;
-      // Clamp so user can't drag the sticker entirely out of frame.
       const clamp = (v: number) => Math.max(-256, Math.min(256, v));
-      const newX = clamp(start.startX + dx);
-      const newY = clamp(start.startY + dy);
-      if (start.target === "emoji") {
-        setEmojiOffset({ x: newX, y: newY });
-      } else {
-        setOffset({ x: newX, y: newY });
-      }
+      updateLayer(start.id, {
+        offsetX: clamp(start.startX + dx),
+        offsetY: clamp(start.startY + dy),
+      });
     },
-    [],
+    [updateLayer],
   );
 
   const onPointerEndCanvas = useCallback(
@@ -353,9 +404,7 @@ export default function TemplatesPage() {
     [],
   );
 
-  // Font picker renders each option in its own font so the user sees what
-  // they're picking before picking it. Memoize the style object so React
-  // doesn't rebuild it every re-render.
+  // Font picker button style memo (shows each option in its own typeface).
   const fontButtonStyle = useMemo(
     () =>
       Object.fromEntries(
@@ -363,6 +412,11 @@ export default function TemplatesPage() {
       ) as Record<TextStickerFont, React.CSSProperties>,
     [],
   );
+
+  const sizeSliderMin = selectedEmoji ? 40 : 40;
+  const sizeSliderMax = selectedEmoji ? 400 : 280;
+  const rotSliderMin = selectedEmoji ? -180 : -45;
+  const rotSliderMax = selectedEmoji ? 180 : 45;
 
   return (
     <main className="relative flex min-h-screen flex-col items-center bg-gradient-to-b from-white to-gray-50 px-6 py-6 dark:from-gray-950 dark:to-gray-900 lg:h-screen lg:min-h-0 lg:overflow-hidden">
@@ -393,25 +447,12 @@ export default function TemplatesPage() {
             צור מדבקה בעברית — הכל בשליטתך
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            כתוב, בחר פונט, צבע, גודל, יישור וזווית. התצוגה מתעדכנת חי.
+            הוסף מילים ואימוג'ים, גרור כל אחד לבד, שנה גודל, זווית וצבע. שכבות בשליטה מלאה.
           </p>
         </div>
 
-        {/* Editor grid in RTL: first column renders on the RIGHT edge.
-            Order: [rail · preview · controls] — rail on far right so user's
-            thumb (on mobile) or eye (on desktop) lands on presets first,
-            preview dominates the middle, controls sit on the left. */}
-        {/* Desktop: grid fills all remaining vertical space in the viewport.
-            Columns stretch to grid row height (default align-items: stretch)
-            so their lg:overflow-y-auto actually produces scrollbars when
-            content exceeds the column height. main is h-screen overflow-hidden
-            so the page itself can't scroll — all scrolling happens inside the
-            columns, preview stays put.
-            Mobile: columns stack, page flows normally. */}
         <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-rows-1 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:overflow-hidden">
-          {/* Preset rail — moved to the far-right column (first in DOM in
-              RTL context). Vertical strip on desktop, horizontal scroll on
-              mobile. One tap loads a preset into the editor. */}
+          {/* Preset rail */}
           <aside className="lg:flex lg:h-full lg:flex-col">
             <div className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               מוכנים
@@ -430,9 +471,7 @@ export default function TemplatesPage() {
             </div>
           </aside>
 
-          {/* Live preview — fits inside the viewport-capped grid on desktop.
-              The canvas is aspect-square so it shrinks to match available
-              width/height. Buttons stay below it, all naturally visible. */}
+          {/* Live preview */}
           <div className="mx-auto w-full max-w-[640px] space-y-3 lg:flex lg:h-full lg:flex-col lg:overflow-y-auto">
             <div className="checkerboard relative overflow-hidden rounded-3xl border border-gray-200 shadow-xl shadow-black/5 dark:border-gray-800 dark:shadow-black/30">
               <canvas
@@ -445,7 +484,6 @@ export default function TemplatesPage() {
                 onPointerCancel={onPointerEndCanvas}
                 className="block aspect-square w-full cursor-grab touch-none select-none active:cursor-grabbing"
               />
-              {/* Zoom button — opens a full-screen view to inspect details */}
               <button
                 onClick={() => setZoomed(true)}
                 aria-label="הגדל תצוגה"
@@ -453,28 +491,28 @@ export default function TemplatesPage() {
               >
                 🔍
               </button>
-              {/* Reset-position button — only appears once the user has
-                  actually dragged the sticker, so the UI stays clean. */}
-              {(offset.x !== 0 || offset.y !== 0) && (
-                <button
-                  onClick={() => setOffset({ x: 0, y: 0 })}
-                  aria-label="איפוס מיקום"
-                  className="absolute right-3 top-3 flex h-10 items-center justify-center gap-1.5 rounded-full bg-white/90 px-3 text-xs font-semibold text-gray-800 shadow-md backdrop-blur transition hover:scale-105 hover:bg-white dark:bg-gray-900/90 dark:text-gray-100 dark:hover:bg-gray-900"
-                >
-                  <span>🎯</span>
-                  <span>מרכז</span>
-                </button>
-              )}
+              {selected &&
+                (selected.offsetX !== 0 || selected.offsetY !== 0) && (
+                  <button
+                    onClick={() =>
+                      patchSelected({ offsetX: 0, offsetY: 0 })
+                    }
+                    aria-label="מרכז את השכבה הנבחרת"
+                    className="absolute right-3 top-3 flex h-10 items-center justify-center gap-1.5 rounded-full bg-white/90 px-3 text-xs font-semibold text-gray-800 shadow-md backdrop-blur transition hover:scale-105 hover:bg-white dark:bg-gray-900/90 dark:text-gray-100 dark:hover:bg-gray-900"
+                  >
+                    <span>🎯</span>
+                    <span>מרכז נבחר</span>
+                  </button>
+                )}
             </div>
             <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-              גרור את המילה לאן שתרצה. הרקע המשובץ שקוף — בוואטסאפ תופיע רק המילה.
+              קליק על אובייקט בתצוגה כדי לבחור אותו. גרור אותו למיקום חופשי.
             </p>
 
-            {/* Action buttons */}
             <div className="flex flex-col gap-2">
               <Button
                 onClick={onShare}
-                disabled={working !== null || !text.trim()}
+                disabled={working !== null}
                 className="h-12 w-full bg-[#25D366] text-base font-semibold text-white shadow-md hover:bg-[#128C7E]"
               >
                 {working === "share" ? "מכין..." : "שלח לוואטסאפ 💬"}
@@ -482,7 +520,7 @@ export default function TemplatesPage() {
               {isSignedIn ? (
                 <Button
                   onClick={onDownload}
-                  disabled={working !== null || !text.trim()}
+                  disabled={working !== null}
                   className="h-12 w-full bg-gradient-to-r from-[color:var(--brand-green)] to-[color:var(--brand-green-dark)] text-base font-semibold text-white shadow-lg shadow-[color:var(--brand-green)]/25 hover:shadow-xl"
                 >
                   {working === "download" ? "מוריד..." : "הורד מדבקה"}
@@ -503,131 +541,297 @@ export default function TemplatesPage() {
             )}
           </div>
 
-          {/* Controls — scroll internally on desktop so the preview column
-              stays in view while the user pages through all editor sections. */}
+          {/* Controls */}
           <div className="space-y-4 lg:h-full lg:overflow-y-auto lg:pl-1">
-            {/* Text input */}
+            {/* Layer list — shows every layer in draw order (top of list =
+                front on canvas). Click to select, arrows to reorder,
+                ✕ to delete. "+ מילה חדשה" adds a new word layer. */}
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <label className="mb-2 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                טקסט
-              </label>
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                maxLength={30}
-                placeholder="למשל: יום הולדת שמח"
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-right text-base font-medium text-gray-900 focus:border-[color:var(--brand-green)] focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-green)]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-50"
-                dir="rtl"
-              />
-              <div className="mt-1 text-left text-[10px] text-gray-400">
-                {text.length}/30
+              <div className="mb-3 flex items-center justify-between">
+                <button
+                  onClick={addWordLayer}
+                  className="rounded-xl bg-[color:var(--brand-green)]/10 px-3 py-1.5 text-xs font-semibold text-[color:var(--brand-green-dark)] transition hover:bg-[color:var(--brand-green)]/20 dark:text-[color:var(--brand-green)]"
+                >
+                  + מילה חדשה
+                </button>
+                <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  שכבות ({layers.length})
+                </label>
+              </div>
+              {/* Render layers TOP-FIRST (visually top = front = last array
+                  index). Makes the list feel like a Photoshop layer stack. */}
+              <div className="space-y-1.5">
+                {[...layers]
+                  .map((l, idx) => ({ l, idx }))
+                  .reverse()
+                  .map(({ l, idx }) => {
+                    const isSelected = l.id === selectedId;
+                    const atFront = idx === layers.length - 1;
+                    const atBack = idx === 0;
+                    return (
+                      <div
+                        key={l.id}
+                        className={`flex items-center gap-1.5 rounded-xl border p-1.5 transition ${
+                          isSelected
+                            ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10"
+                            : "border-gray-200 bg-gray-50 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800"
+                        }`}
+                      >
+                        <button
+                          onClick={() => deleteLayer(l.id)}
+                          title="מחק שכבה"
+                          aria-label="מחק שכבה"
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-xs text-gray-500 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+                        >
+                          ✕
+                        </button>
+                        <button
+                          onClick={() => moveLayer(l.id, "back")}
+                          disabled={atBack}
+                          title="הזז אחורה"
+                          aria-label="הזז אחורה"
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-xs text-gray-600 transition hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          onClick={() => moveLayer(l.id, "front")}
+                          disabled={atFront}
+                          title="הבא קדימה"
+                          aria-label="הבא קדימה"
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-xs text-gray-600 transition hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onClick={() => setSelectedId(l.id)}
+                          className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden rounded-lg px-2 py-1 text-right"
+                        >
+                          <span
+                            className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100"
+                            style={
+                              l.type === "word"
+                                ? { fontFamily: fontStack(l.font) }
+                                : undefined
+                            }
+                          >
+                            {layerPreview(l)}
+                          </span>
+                          <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            {l.type === "word" ? "מילה" : "אימוג'י"}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
             </section>
 
-            {/* Emoji picker — categories shown as chips with a sample emoji.
-                Click a category to expand its grid. Picked emojis become a
-                standalone draggable layer on the canvas — the user grabs
-                them with mouse/finger and moves them independently. */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <div className="mb-3 flex items-center justify-between">
-                {/* Selected emoji(s) + delete/recenter buttons. Only shown
-                    once the user has actually picked something. */}
-                {emoji ? (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => {
-                        setEmoji("");
-                        setEmojiOffset(DEFAULT_EMOJI_OFFSET);
-                        setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
-                        setEmojiRotation(0);
-                        setEmojiBehind(false);
-                        setEmojiSkin("");
-                        setSelectedLayer("word");
-                      }}
-                      className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
-                      title="הסר אימוג'י"
-                    >
-                      <span className="text-lg leading-none">{composedEmoji || emoji}</span>
-                      <span className="text-xs">✕ הסר</span>
-                    </button>
-                    <button
-                      onClick={() => setEmojiOffset(DEFAULT_EMOJI_OFFSET)}
-                      className="rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                      title="החזר את האימוג'י למיקום ברירת המחדל"
-                    >
-                      🎯 מרכז
-                    </button>
+            {/* Selected WORD controls */}
+            {selectedWord && (
+              <>
+                <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                  <label className="mb-2 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    טקסט של המילה הנבחרת
+                  </label>
+                  <input
+                    value={selectedWord.text}
+                    onChange={(e) => patchSelected({ text: e.target.value })}
+                    maxLength={30}
+                    placeholder="למשל: יום הולדת שמח"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-right text-base font-medium text-gray-900 focus:border-[color:var(--brand-green)] focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-green)]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-50"
+                    dir="rtl"
+                  />
+                  <div className="mt-1 text-left text-[10px] text-gray-400">
+                    {selectedWord.text.length}/30
                   </div>
-                ) : (
-                  <span />
-                )}
-                <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  אימוג׳י
-                </label>
-              </div>
+                </section>
 
-              {emoji && (
-                <>
-                  <p className="mb-3 text-right text-[11px] text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
-                    💡 גרור את האימוג'י על התצוגה למיקום חופשי — כל מקום שתרצה
-                  </p>
-                  {/* Skin tone palette — only appears when the picked emoji
-                      actually accepts a Fitzpatrick modifier. Pick any skin
-                      tone, the emoji on canvas recolors instantly. */}
-                  {hasSkinToneCapable && (
-                    <div className="mb-3 flex items-center justify-end gap-2">
-                      <div className="flex gap-1.5 rounded-xl border border-gray-200 bg-gray-50 p-1.5 dark:border-gray-700 dark:bg-gray-800">
-                        {SKIN_TONE_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.id || "default"}
-                            onClick={() => setEmojiSkin(opt.id)}
-                            title={opt.label}
-                            aria-label={opt.label}
-                            className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${
-                              emojiSkin === opt.id
-                                ? "border-[color:var(--brand-green)] ring-2 ring-[color:var(--brand-green)]/30 scale-110"
-                                : "border-white dark:border-gray-600"
-                            }`}
-                            style={{ backgroundColor: opt.swatch }}
-                          />
-                        ))}
-                      </div>
-                      <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                        גוון עור
-                      </label>
-                    </div>
-                  )}
-                  {/* Layer stacking toggle — front vs. behind the word. */}
-                  <div className="mb-3 flex items-center justify-end gap-2">
-                    <div className="flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+                <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                  <label className="mb-3 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    פונט
+                  </label>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {FONT_OPTIONS.map((f) => (
                       <button
-                        onClick={() => setEmojiBehind(false)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                          !emojiBehind
-                            ? "bg-white text-[color:var(--brand-green-dark)] shadow-sm dark:bg-gray-900 dark:text-[color:var(--brand-green)]"
-                            : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                        key={f.id}
+                        onClick={() => patchSelected({ font: f.id })}
+                        style={fontButtonStyle[f.id]}
+                        className={`rounded-xl border px-4 py-2.5 text-base font-bold transition-all ${
+                          selectedWord.font === f.id
+                            ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] shadow-sm dark:text-[color:var(--brand-green)]"
+                            : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                         }`}
                       >
-                        מלפנים
+                        {f.label}
                       </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                  <label className="mb-3 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    צבע
+                  </label>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {STYLE_OPTIONS.map((s) => (
                       <button
-                        onClick={() => setEmojiBehind(true)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                          emojiBehind
-                            ? "bg-white text-[color:var(--brand-green-dark)] shadow-sm dark:bg-gray-900 dark:text-[color:var(--brand-green)]"
-                            : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                        key={s.id}
+                        onClick={() => patchSelected({ style: s.id })}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all ${
+                          selectedWord.style === s.id
+                            ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]"
+                            : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
                         }`}
                       >
-                        מאחור
+                        <span
+                          aria-hidden
+                          className="inline-block h-4 w-4 rounded-full border border-gray-300 dark:border-gray-600"
+                          style={{ backgroundColor: s.swatch }}
+                        />
+                        {s.label}
                       </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* Selected EMOJI controls — skin tone palette when supported */}
+            {selectedEmoji && (
+              <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-2xl leading-none">
+                    {layerPreview(selectedEmoji)}
+                  </div>
+                  <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    אימוג׳י נבחר
+                  </label>
+                </div>
+                {selectedEmojiSupportsSkin ? (
+                  <div className="flex items-center justify-end gap-2">
+                    <div className="flex gap-1.5 rounded-xl border border-gray-200 bg-gray-50 p-1.5 dark:border-gray-700 dark:bg-gray-800">
+                      {SKIN_TONE_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id || "default"}
+                          onClick={() => patchSelected({ skin: opt.id })}
+                          title={opt.label}
+                          aria-label={opt.label}
+                          className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${
+                            selectedEmoji.skin === opt.id
+                              ? "border-[color:var(--brand-green)] ring-2 ring-[color:var(--brand-green)]/30 scale-110"
+                              : "border-white dark:border-gray-600"
+                          }`}
+                          style={{ backgroundColor: opt.swatch }}
+                        />
+                      ))}
                     </div>
                     <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                      שכבת האימוג׳י
+                      גוון עור
                     </label>
                   </div>
-                </>
-              )}
+                ) : (
+                  <p className="text-right text-[11px] text-gray-400">
+                    לאימוג'י זה אין אפשרות לשנות גוון עור.
+                  </p>
+                )}
+              </section>
+            )}
 
+            {/* Size + rotation for the SELECTED layer. Ranges depend on
+                layer type. Also alignment when the selection is a word. */}
+            {selected && (
+              <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div className="space-y-4">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                        {selected.size}px
+                      </span>
+                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        גודל {selected.type === "word" ? "המילה" : "האימוג׳י"}
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min={sizeSliderMin}
+                      max={sizeSliderMax}
+                      step="4"
+                      value={selected.size}
+                      onChange={(e) =>
+                        patchSelected({ size: Number(e.target.value) })
+                      }
+                      dir="rtl"
+                      className="w-full accent-[color:var(--brand-green)]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                        {selected.rotation}°
+                      </span>
+                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        זווית {selected.type === "word" ? "המילה" : "האימוג׳י"}
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min={rotSliderMin}
+                      max={rotSliderMax}
+                      step="1"
+                      value={selected.rotation}
+                      onChange={(e) =>
+                        patchSelected({ rotation: Number(e.target.value) })
+                      }
+                      dir="rtl"
+                      className="w-full accent-[color:var(--brand-green)]"
+                    />
+                    <div className="mt-1 flex justify-between text-[10px] text-gray-400">
+                      <span>{rotSliderMin}°</span>
+                      <button
+                        onClick={() => patchSelected({ rotation: 0 })}
+                        className="text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
+                      >
+                        איפוס
+                      </button>
+                      <span>+{rotSliderMax}°</span>
+                    </div>
+                  </div>
+
+                  {selectedWord && (
+                    <div>
+                      <label className="mb-2 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        יישור
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        {ALIGN_OPTIONS.map((a) => (
+                          <button
+                            key={a.id}
+                            onClick={() => patchSelected({ align: a.id })}
+                            className={`flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition-all ${
+                              selectedWord.align === a.id
+                                ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]"
+                                : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                            }`}
+                          >
+                            <span className="text-base">{a.icon}</span>
+                            {a.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Emoji picker — ADDS a new emoji layer on click. Always
+                visible so user can keep stacking more emojis. */}
+            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+              <label className="mb-3 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                הוסף אימוג׳י
+              </label>
               <div className="flex flex-wrap justify-end gap-2">
                 {EMOJI_CATEGORIES.map((cat) => {
                   const isOpen = openEmojiCat === cat.id;
@@ -657,26 +861,7 @@ export default function TemplatesPage() {
                       (e, i) => (
                         <button
                           key={`${openEmojiCat}-${i}`}
-                          onClick={() => {
-                            // Append to the dedicated emoji state (not text).
-                            // Cap at ~8 emojis — plenty for any sticker.
-                            setEmoji((prev) => {
-                              if (!prev) {
-                                // First pick: reset offset, size, rotation to
-                                // sensible defaults so the new emoji lands
-                                // visible and nicely sized, and auto-select
-                                // it so sliders affect it right away.
-                                setEmojiOffset(DEFAULT_EMOJI_OFFSET);
-                                setEmojiSize(defaultEmojiSize(size));
-                                setEmojiRotation(0);
-                                setSelectedLayer("emoji");
-                              }
-                              const combined = prev + e;
-                              return combined.length > 16
-                                ? combined.slice(0, 16)
-                                : combined;
-                            });
-                          }}
+                          onClick={() => addEmojiLayer(e)}
                           className="flex aspect-square items-center justify-center rounded-xl border border-gray-200 bg-white text-2xl transition-all hover:-translate-y-0.5 hover:border-[color:var(--brand-green)]/50 hover:shadow-md dark:border-gray-800 dark:bg-gray-800"
                         >
                           {e}
@@ -685,231 +870,15 @@ export default function TemplatesPage() {
                     )}
                   </div>
                   <p className="mt-3 text-right text-[10px] text-gray-400">
-                    הקלקה מוסיפה אימוג׳י — ניתן לגרור אותו לכל מקום בתצוגה
+                    הקלקה מוסיפה שכבת אימוג׳י חדשה — אפשר להוסיף כמה שתרצה
                   </p>
                 </div>
               )}
             </section>
-
-            {/* Font picker */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <label className="mb-3 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                פונט
-              </label>
-              <div className="flex flex-wrap justify-end gap-2">
-                {FONT_OPTIONS.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setFont(f.id)}
-                    style={fontButtonStyle[f.id]}
-                    className={`rounded-xl border px-4 py-2.5 text-base font-bold transition-all ${
-                      font === f.id
-                        ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] shadow-sm dark:text-[color:var(--brand-green)]"
-                        : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Style (color) picker */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <label className="mb-3 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                צבע
-              </label>
-              <div className="flex flex-wrap justify-end gap-2">
-                {STYLE_OPTIONS.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setStyle(s.id)}
-                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all ${
-                      style === s.id
-                        ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]"
-                        : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className="inline-block h-4 w-4 rounded-full border border-gray-300 dark:border-gray-600"
-                      style={{ backgroundColor: s.swatch }}
-                    />
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* Size + rotation sliders — apply to the SELECTED layer
-                (word or emoji). Tab switcher shows up only when an emoji
-                exists, otherwise the sliders act on the word as before. */}
-            <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              {/* Layer switcher */}
-              {emoji && (
-                <div className="mb-4 flex gap-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
-                  {([
-                    { id: "word", label: "מילה", preview: text || "א" },
-                    { id: "emoji", label: "אימוג'י", preview: emoji },
-                  ] as const).map((layer) => (
-                    <button
-                      key={layer.id}
-                      onClick={() => setSelectedLayer(layer.id)}
-                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                        selectedLayer === layer.id
-                          ? "bg-white text-[color:var(--brand-green-dark)] shadow-sm dark:bg-gray-900 dark:text-[color:var(--brand-green)]"
-                          : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                      }`}
-                    >
-                      <span className="text-base leading-none">{layer.preview}</span>
-                      <span>{layer.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="space-y-4">
-                {/* Size — ranges differ: word 40-280 (display type), emoji 40-400 (emojis scale nicely up) */}
-                {selectedLayer === "emoji" && emoji ? (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                        {emojiSize}px
-                      </span>
-                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        גודל האימוג׳י
-                      </label>
-                    </div>
-                    <input
-                      type="range"
-                      min="40"
-                      max="400"
-                      step="4"
-                      value={emojiSize}
-                      onChange={(e) => setEmojiSize(Number(e.target.value))}
-                      dir="rtl"
-                      className="w-full accent-[color:var(--brand-green)]"
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                        {size}px
-                      </span>
-                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        גודל המילה
-                      </label>
-                    </div>
-                    <input
-                      type="range"
-                      min="40"
-                      max="280"
-                      step="4"
-                      value={size}
-                      onChange={(e) => setSize(Number(e.target.value))}
-                      dir="rtl"
-                      className="w-full accent-[color:var(--brand-green)]"
-                    />
-                  </div>
-                )}
-
-                {/* Rotation — emoji gets the full -180/+180 range since
-                    rotated emojis read fine at any angle. Word stays at
-                    ±45° so Hebrew letters remain readable. */}
-                {selectedLayer === "emoji" && emoji ? (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                        {emojiRotation}°
-                      </span>
-                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        זווית האימוג׳י
-                      </label>
-                    </div>
-                    <input
-                      type="range"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={emojiRotation}
-                      onChange={(e) => setEmojiRotation(Number(e.target.value))}
-                      dir="rtl"
-                      className="w-full accent-[color:var(--brand-green)]"
-                    />
-                    <div className="mt-1 flex justify-between text-[10px] text-gray-400">
-                      <span>-180°</span>
-                      <button
-                        onClick={() => setEmojiRotation(0)}
-                        className="text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
-                      >
-                        איפוס
-                      </button>
-                      <span>+180°</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                        {rotation}°
-                      </span>
-                      <label className="text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        זווית המילה
-                      </label>
-                    </div>
-                    <input
-                      type="range"
-                      min="-45"
-                      max="45"
-                      step="1"
-                      value={rotation}
-                      onChange={(e) => setRotation(Number(e.target.value))}
-                      dir="rtl"
-                      className="w-full accent-[color:var(--brand-green)]"
-                    />
-                    <div className="mt-1 flex justify-between text-[10px] text-gray-400">
-                      <span>-45°</span>
-                      <button
-                        onClick={() => setRotation(0)}
-                        className="text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
-                      >
-                        איפוס
-                      </button>
-                      <span>+45°</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Alignment */}
-                <div>
-                  <label className="mb-2 block text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    יישור
-                  </label>
-                  <div className="flex justify-end gap-2">
-                    {ALIGN_OPTIONS.map((a) => (
-                      <button
-                        key={a.id}
-                        onClick={() => setAlign(a.id)}
-                        className={`flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition-all ${
-                          align === a.id
-                            ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]"
-                            : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                        }`}
-                      >
-                        <span className="text-base">{a.icon}</span>
-                        {a.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
           </div>
         </div>
 
-        {/* Full-screen zoom modal — click the 🔍 on the preview to open, click
-            anywhere outside / press Escape to close. The canvas inside stays
-            in sync with the editor via the shared useEffect above. */}
+        {/* Full-screen zoom modal */}
         {zoomed && (
           <div
             onClick={() => setZoomed(false)}

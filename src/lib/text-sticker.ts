@@ -52,40 +52,55 @@ export type TextStickerFont =
 /** Horizontal anchor point for the text inside the 512×512 canvas. */
 export type TextStickerAlign = "center" | "right" | "left";
 
-export interface TextStickerOptions {
+/**
+ * One word layer on the canvas. Fully self-contained: its own text, font,
+ * color style, size, rotation, alignment, and position. Multiple word
+ * layers can coexist, each editable independently.
+ */
+export interface WordLayer {
+  id: string;
+  type: "word";
   text: string;
-  /** Emoji(s) picked from the emoji panel — stored separately from text so
-   *  the user can drag it around the canvas independently of the word. */
-  emoji?: string;
-  /** Emoji position inside the 512×512 canvas. 0,0 = centered.
-   *  The user drags the emoji directly on the preview; this is where it
-   *  ends up. Default: slightly above center so the emoji starts visible
-   *  above the word the moment the user picks it. */
-  emojiOffsetX?: number;
-  emojiOffsetY?: number;
-  /** Emoji render size in px. Independent from the word's font size so the
-   *  user can scale emoji and word separately. If not provided, defaults
-   *  to 0.9× the word font size for visual balance. */
-  emojiSize?: number;
-  /** Emoji rotation in degrees. Independent from the word rotation. */
-  emojiRotation?: number;
-  /** If true, draw the emoji BEHIND the word (the word covers it). Default
-   *  false = emoji sits on top of the word. Lets the user produce "sticker
-   *  over a background emoji" compositions. */
-  emojiBehindText?: boolean;
-  style?: TextStickerStyle;
-  font?: TextStickerFont;
-  /** Max font size in px (auto-shrinks if the word doesn't fit). 40–300. */
-  size?: number;
-  /** Rotation in degrees. Negative = tilt left, positive = tilt right. */
-  rotation?: number;
-  /** Horizontal alignment. */
-  align?: TextStickerAlign;
+  font: TextStickerFont;
+  style: TextStickerStyle;
+  /** Font size in px. 40–280. */
+  size: number;
+  /** Rotation in degrees. -45 to +45 (keeps Hebrew readable). */
+  rotation: number;
+  align: TextStickerAlign;
+  /** Offset from canvas center in 512-space coords. */
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * One emoji layer on the canvas. Self-contained like WordLayer — its own
+ * size, rotation, skin tone, position. Lets the user build stickers with
+ * multiple emojis, each tuned independently.
+ */
+export interface EmojiLayer {
+  id: string;
+  type: "emoji";
+  /** The base emoji character (no skin-tone modifier) the user picked. */
+  base: string;
+  /** Fitzpatrick skin-tone modifier: '' or one of 🏻🏼🏽🏾🏿. Ignored
+   *  for emojis that don't support it (falls through harmlessly). */
+  skin: string;
+  /** Emoji render size in px. 20–400. */
+  size: number;
+  /** Rotation in degrees. -180 to +180 (emojis survive any angle). */
+  rotation: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export type StickerLayer = WordLayer | EmojiLayer;
+
+export interface MultiLayerOptions {
+  /** Layers in DRAW order — first = back, last = front (on top). */
+  layers: StickerLayer[];
   /** Watermark-free output (paid users). */
   watermark?: boolean;
-  /** User-dragged offset of the main WORD inside the 512×512 canvas. 0,0 = centered. */
-  offsetX?: number;
-  offsetY?: number;
 }
 
 /**
@@ -480,75 +495,51 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
   },
 ];
 
+const BOLD_FONTS: ReadonlySet<TextStickerFont> = new Set([
+  "rubik",
+  "assistant",
+  "karantina",
+  "frank-ruhl",
+  "miriam",
+]);
+
 /**
- * Render a 512×512 canvas with the given text. Called both for the final
- * exported blob and for the live preview (via an exposed helper below).
+ * Draw a single word layer at its (offsetX, offsetY) with its own font,
+ * style, rotation, size, alignment. Fully self-contained: calls save/
+ * restore so the ctx state is isolated.
  */
-function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
-  const size = 512;
+function drawWordLayer(
+  ctx: CanvasRenderingContext2D,
+  layer: WordLayer,
+  canvasSize: number,
+) {
+  ctx.save();
+  ctx.translate(canvasSize / 2 + layer.offsetX, canvasSize / 2 + layer.offsetY);
+  if (layer.rotation !== 0) {
+    ctx.rotate((layer.rotation * Math.PI) / 180);
+  }
 
-  // Fully transparent canvas — no background shapes at all.
-  ctx.clearRect(0, 0, size, size);
-
-  const style: TextStickerStyle = opts.style ?? "classic";
-  const font: TextStickerFont = opts.font ?? "marker";
-  const align: TextStickerAlign = opts.align ?? "center";
-  const rotation = opts.rotation ?? 0;
-  const emoji = opts.emoji ?? "";
-  // Text is always JUST the word — emoji is a separate draggable layer now.
-  const text = opts.text;
-  const stack = fontStack(font);
-
-  // The size slider is the single source of truth — no auto-shrink.
-  // Auto-shrink used to silently clamp the font to the canvas width, which
-  // broke the slider's upper range (the user would drag it up and see
-  // nothing change, because we'd immediately shrink back down to fit).
-  // Now the user is in control: crank it up for a chunky sticker, drag down
-  // if the word overflows. Overflow is visible in the preview so the user
-  // gets immediate feedback.
-  const fontSize = Math.min(280, Math.max(40, opts.size ?? 160));
-  // Some fonts only have one weight in our next/font config (Secular One,
-  // Suez One, Varela Round, Permanent Marker, Bellefair = 400 only). For
-  // multi-weight faces we crank to the boldest available for sticker punch.
-  const boldFonts: TextStickerFont[] = [
-    "rubik",
-    "assistant",
-    "karantina",
-    "frank-ruhl",
-    "miriam",
-  ];
-  const weight = boldFonts.includes(font) ? "700" : "400";
-  ctx.font = `${weight} ${fontSize}px ${stack}`;
-
+  const fontSize = Math.min(280, Math.max(40, layer.size));
+  const weight = BOLD_FONTS.has(layer.font) ? "700" : "400";
+  ctx.font = `${weight} ${fontSize}px ${fontStack(layer.font)}`;
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
-  // Two separate draw passes — word and emoji. Each handles its own
-  // save/translate/rotate/restore so they're fully independent. Calling
-  // order determines who sits on top: whoever is drawn LAST wins.
-  const drawWord = () => {
-  ctx.save();
-  const offX = opts.offsetX ?? 0;
-  const offY = opts.offsetY ?? 0;
-  ctx.translate(size / 2 + offX, size / 2 + offY);
-  if (rotation !== 0) {
-    ctx.rotate((rotation * Math.PI) / 180);
-  }
-
-  // Pick horizontal anchor
+  // Horizontal anchor from the layer's align setting.
   let x = 0;
-  if (align === "right") {
+  if (layer.align === "right") {
     ctx.textAlign = "right";
-    x = size / 2 - 40;
-  } else if (align === "left") {
+    x = canvasSize / 2 - 40;
+  } else if (layer.align === "left") {
     ctx.textAlign = "left";
-    x = -(size / 2) + 40;
+    x = -(canvasSize / 2) + 40;
   } else {
     ctx.textAlign = "center";
     x = 0;
   }
   const y = 0;
+  const text = layer.text;
 
   // Soft drop shadow so the letters pop off whatever chat background they
   // land on. Tuned low enough to stay under 100KB after WebP compression.
@@ -557,65 +548,44 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 4;
 
+  const style = layer.style;
   if (style === "classic") {
-    // White letters with thick black outline — the classic WhatsApp sticker
-    // look. Readable on any wallpaper.
     ctx.lineWidth = 10;
     ctx.strokeStyle = "#000000";
     ctx.strokeText(text, x, y);
     ctx.fillStyle = "#FFFFFF";
     ctx.fillText(text, x, y);
   } else if (style === "black") {
-    // Solid black letters with white outline — editorial / bold feel.
     ctx.lineWidth = 10;
     ctx.strokeStyle = "#FFFFFF";
     ctx.strokeText(text, x, y);
     ctx.fillStyle = "#000000";
     ctx.fillText(text, x, y);
   } else if (style === "bubble") {
-    // Balloon letters. Super-thick black outline makes each glyph read as
-    // round & 3D even on sans-serif faces. Then a slightly narrower white
-    // stroke + a thin inner stroke + a pink gloss fill + a white highlight
-    // line for that sticker-on-bubblegum feel.
     ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
     ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 6;
-
-    // Outer black balloon outline — very thick, scales with font size so it
-    // stays balloon-y at any size.
     ctx.lineWidth = Math.max(16, fontSize * 0.18);
     ctx.strokeStyle = "#000000";
     ctx.strokeText(text, x, y);
-
-    // Pink bubblegum fill.
     ctx.shadowColor = "transparent";
     ctx.fillStyle = "#FF4FA3";
     ctx.fillText(text, x, y);
-
-    // White inner highlight stroke — gives the 3D glossy look.
     ctx.lineWidth = Math.max(3, fontSize * 0.03);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
     ctx.strokeText(text, x, y - fontSize * 0.04);
   } else if (style === "graffiti") {
-    // Tel Aviv street-wall. Spray-paint drips implied by big offset shadow,
-    // thick black outline, bright two-tone spray fill. Reads as wall art.
     ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 8;
     ctx.shadowOffsetY = 10;
-
-    // Black wall-backing outline — thick, rough feel.
     ctx.lineWidth = Math.max(12, fontSize * 0.1);
     ctx.strokeStyle = "#000000";
     ctx.strokeText(text, x, y);
-
-    // Thin yellow layer behind the main color — "double spray" trick.
     ctx.shadowColor = "transparent";
     ctx.lineWidth = Math.max(6, fontSize * 0.05);
     ctx.strokeStyle = "#FFE63C";
     ctx.strokeText(text, x, y);
-
-    // Main spray fill — magenta→cyan gradient.
     const metrics = ctx.measureText(text);
     const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.7;
     const descent = metrics.actualBoundingBoxDescent || fontSize * 0.3;
@@ -626,9 +596,6 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
     ctx.fillStyle = grad;
     ctx.fillText(text, x, y);
   } else if (style === "neon") {
-    // Glowing neon sign. Multiple overlapping glows build up a convincing
-    // halo, then a bright fill on top. Works best on dark WhatsApp wallpapers
-    // but still reads on light because of the solid center fill.
     const glow = "#00F5FF";
     for (const blur of [30, 20, 10]) {
       ctx.shadowColor = glow;
@@ -639,17 +606,14 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
       ctx.strokeStyle = glow;
       ctx.strokeText(text, x, y);
     }
-    // Core bright fill — white center gives the "bulb is on" look.
     ctx.shadowBlur = 8;
     ctx.fillStyle = "#FFFFFF";
     ctx.fillText(text, x, y);
   } else {
-    // Gradient-filled letters with black outline — green / sunset / night.
     const [c1, c2] = GRADIENTS[style];
     ctx.lineWidth = 10;
     ctx.strokeStyle = "#000000";
     ctx.strokeText(text, x, y);
-
     const metrics = ctx.measureText(text);
     const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.7;
     const descent = metrics.actualBoundingBoxDescent || fontSize * 0.3;
@@ -660,57 +624,70 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
     ctx.fillText(text, x, y);
   }
 
-    ctx.restore();
-  };
+  ctx.restore();
+}
 
-  const drawEmoji = () => {
-    if (!emoji) return;
-    ctx.save();
-    const emojiX = (opts.emojiOffsetX ?? 0) + size / 2;
-    const emojiY = (opts.emojiOffsetY ?? 0) + size / 2;
-    ctx.translate(emojiX, emojiY);
+/**
+ * Draw a single emoji layer. Applies the skin-tone modifier if the base
+ * emoji supports one. Otherwise the skin field is ignored.
+ */
+function drawEmojiLayer(
+  ctx: CanvasRenderingContext2D,
+  layer: EmojiLayer,
+  canvasSize: number,
+) {
+  if (!layer.base) return;
+  ctx.save();
+  ctx.translate(
+    canvasSize / 2 + layer.offsetX,
+    canvasSize / 2 + layer.offsetY,
+  );
+  if (layer.rotation !== 0) {
+    ctx.rotate((layer.rotation * Math.PI) / 180);
+  }
 
-    const emojiRotation = opts.emojiRotation ?? 0;
-    if (emojiRotation !== 0) {
-      ctx.rotate((emojiRotation * Math.PI) / 180);
+  const emojiSize = Math.max(20, Math.min(400, layer.size));
+  ctx.font = `${emojiSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = "#000";
+
+  const glyph =
+    layer.skin && SKIN_TONE_EMOJIS.has(layer.base)
+      ? layer.base + layer.skin
+      : layer.base;
+  ctx.fillText(glyph, 0, 0);
+  ctx.restore();
+}
+
+/**
+ * Render a 512×512 canvas by drawing each layer in order. First layer in
+ * the array ends up in the back, last ends up on top.
+ */
+function paintCanvas(ctx: CanvasRenderingContext2D, opts: MultiLayerOptions) {
+  const size = 512;
+  ctx.clearRect(0, 0, size, size);
+  for (const layer of opts.layers) {
+    if (layer.type === "word") {
+      drawWordLayer(ctx, layer, size);
+    } else if (layer.type === "emoji") {
+      drawEmojiLayer(ctx, layer, size);
     }
-
-    const emojiSize = Math.max(
-      20,
-      Math.min(400, opts.emojiSize ?? defaultEmojiSize(fontSize)),
-    );
-    ctx.font = `${emojiSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 3;
-    ctx.fillStyle = "#000"; // Ignored for color-emoji glyphs.
-
-    ctx.fillText(emoji, 0, 0);
-    ctx.restore();
-  };
-
-  // Stacking: emojiBehindText=true → emoji first (word on top).
-  //           emojiBehindText=false (default) → word first (emoji on top).
-  if (opts.emojiBehindText) {
-    drawEmoji();
-    drawWord();
-  } else {
-    drawWord();
-    drawEmoji();
   }
 }
 
 /**
- * Paint the given text into a user-provided canvas — used by the editor's
- * live-preview DOM canvas so resizing / dragging / typing all flow through
- * the exact same renderer that produces the final exported sticker.
+ * Paint the given layers into a user-provided canvas — used by the editor's
+ * live-preview DOM canvas so all state changes flow through the exact same
+ * renderer that produces the final exported sticker.
  */
 export function paintPreview(
   canvas: HTMLCanvasElement,
-  opts: TextStickerOptions,
+  opts: MultiLayerOptions,
 ): void {
   if (canvas.width !== 512) canvas.width = 512;
   if (canvas.height !== 512) canvas.height = 512;
@@ -720,11 +697,13 @@ export function paintPreview(
 }
 
 /**
- * Render 512×512 PNG blob with the given Hebrew text, letters-only on fully
- * transparent background. Then route through toWhatsAppSticker so we reuse
- * the same watermark + WebP pipeline as the photo flow.
+ * Render a 512×512 sticker blob from the given layers. Composites every
+ * layer (words + emojis) on a transparent background, then routes through
+ * toWhatsAppSticker for the final watermark + WebP pipeline.
  */
-async function renderTextCanvas(opts: TextStickerOptions): Promise<Blob> {
+export async function generateTextSticker(
+  opts: MultiLayerOptions,
+): Promise<Blob> {
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -734,8 +713,6 @@ async function renderTextCanvas(opts: TextStickerOptions): Promise<Blob> {
 
   paintCanvas(ctx, opts);
 
-  // Snapshot as PNG (preserves transparency), then let the main sticker
-  // pipeline enforce 512×512 + WebP + optional watermark.
   const pngBlob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
@@ -747,10 +724,21 @@ async function renderTextCanvas(opts: TextStickerOptions): Promise<Blob> {
   return toWhatsAppSticker(pngBlob, { watermark: opts.watermark ?? false });
 }
 
-export async function generateTextSticker(
-  opts: TextStickerOptions,
-): Promise<Blob> {
-  return renderTextCanvas(opts);
+/**
+ * Estimate the bounding box of a word layer — used by the editor's
+ * pointer hit-test to figure out which layer the user clicked. We don't
+ * have a canvas context handy in the hit-test path so we approximate
+ * using an average Hebrew-glyph ratio (~0.55 × fontSize per char).
+ */
+export function wordLayerHalfExtent(layer: WordLayer): {
+  halfW: number;
+  halfH: number;
+} {
+  const fontSize = Math.min(280, Math.max(40, layer.size));
+  const chars = Math.max(1, layer.text.length);
+  const halfW = (chars * fontSize * 0.55) / 2 + 16;
+  const halfH = (fontSize * 1.1) / 2 + 12;
+  return { halfW, halfH };
 }
 
 /**
