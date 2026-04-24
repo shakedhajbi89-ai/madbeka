@@ -115,18 +115,20 @@ export default async function Image() {
             fontWeight: 900,
             letterSpacing: -4,
             marginTop: 8,
+            lineHeight: 1,
           }}
         >
           {BRAND_NAME}
         </div>
 
         {/* Hebrew tagline — pre-reversed so Satori's LTR layout renders
-            correctly when read RTL by a Hebrew speaker. */}
+            correctly when read RTL by a Hebrew speaker. Generous margin
+            above so it doesn't crowd the wordmark. */}
         <div
           style={{
             fontSize: 40,
             fontWeight: 700,
-            marginTop: 14,
+            marginTop: 42,
             textAlign: "center",
             maxWidth: 1000,
             lineHeight: 1.25,
