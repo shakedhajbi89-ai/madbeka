@@ -69,6 +69,10 @@ export interface TextStickerOptions {
   emojiSize?: number;
   /** Emoji rotation in degrees. Independent from the word rotation. */
   emojiRotation?: number;
+  /** If true, draw the emoji BEHIND the word (the word covers it). Default
+   *  false = emoji sits on top of the word. Lets the user produce "sticker
+   *  over a background emoji" compositions. */
+  emojiBehindText?: boolean;
   style?: TextStickerStyle;
   font?: TextStickerFont;
   /** Max font size in px (auto-shrinks if the word doesn't fit). 40–300. */
@@ -460,9 +464,10 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
-  // Translate so rotation happens around the canvas center, not (0,0).
-  // User-drag offset is applied on top of center so dragging feels like
-  // moving the sticker, not rotating it.
+  // Two separate draw passes — word and emoji. Each handles its own
+  // save/translate/rotate/restore so they're fully independent. Calling
+  // order determines who sits on top: whoever is drawn LAST wins.
+  const drawWord = () => {
   ctx.save();
   const offX = opts.offsetX ?? 0;
   const offY = opts.offsetY ?? 0;
@@ -595,12 +600,11 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
     ctx.fillText(text, x, y);
   }
 
-  ctx.restore();
+    ctx.restore();
+  };
 
-  // Emoji layer — drawn INDEPENDENTLY of the word. Its own translate,
-  // its own position, its own size, its own rotation. Lets the user size
-  // and rotate the emoji separately from the word.
-  if (emoji) {
+  const drawEmoji = () => {
+    if (!emoji) return;
     ctx.save();
     const emojiX = (opts.emojiOffsetX ?? 0) + size / 2;
     const emojiY = (opts.emojiOffsetY ?? 0) + size / 2;
@@ -618,15 +622,24 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
     ctx.font = `${emojiSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // Soft shadow so the emoji pops on any chat wallpaper.
     ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
     ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
-    ctx.fillStyle = "#000"; // Color is ignored for color-emoji glyphs.
+    ctx.fillStyle = "#000"; // Ignored for color-emoji glyphs.
 
     ctx.fillText(emoji, 0, 0);
     ctx.restore();
+  };
+
+  // Stacking: emojiBehindText=true → emoji first (word on top).
+  //           emojiBehindText=false (default) → word first (emoji on top).
+  if (opts.emojiBehindText) {
+    drawEmoji();
+    drawWord();
+  } else {
+    drawWord();
+    drawEmoji();
   }
 }
 

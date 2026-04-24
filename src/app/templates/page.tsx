@@ -66,6 +66,9 @@ export default function TemplatesPage() {
   const [emojiOffset, setEmojiOffset] = useState(DEFAULT_EMOJI_OFFSET);
   const [emojiSize, setEmojiSize] = useState(defaultEmojiSize(DEFAULT_WORD_SIZE));
   const [emojiRotation, setEmojiRotation] = useState(0);
+  // Layer stacking: when true, the emoji is drawn BEHIND the word (the
+  // word covers it). Default false = emoji on top.
+  const [emojiBehind, setEmojiBehind] = useState(false);
   // Which layer the size/rotation controls currently affect.
   const [selectedLayer, setSelectedLayer] = useState<SelectedLayer>("word");
   const [style, setStyle] = useState<TextStickerStyle>("classic");
@@ -98,6 +101,7 @@ export default function TemplatesPage() {
       emojiOffsetY: emojiOffset.y,
       emojiSize,
       emojiRotation,
+      emojiBehindText: emojiBehind,
       style,
       font,
       size,
@@ -109,7 +113,7 @@ export default function TemplatesPage() {
     };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
+  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -150,6 +154,7 @@ export default function TemplatesPage() {
       emojiOffsetY: emojiOffset.y,
       emojiSize,
       emojiRotation,
+      emojiBehindText: emojiBehind,
       style,
       font,
       size,
@@ -159,7 +164,7 @@ export default function TemplatesPage() {
       offsetY: offset.y,
       watermark: shouldWatermark,
     });
-  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
+  }, [text, emoji, emojiOffset.x, emojiOffset.y, emojiSize, emojiRotation, emojiBehind, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
 
   const onDownload = useCallback(async () => {
     if (!isSignedIn) {
@@ -221,6 +226,7 @@ export default function TemplatesPage() {
     setEmojiOffset(DEFAULT_EMOJI_OFFSET);
     setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
     setEmojiRotation(0);
+    setEmojiBehind(false);
     setSelectedLayer("word");
     setStyle(t.style);
     setFont(t.font);
@@ -505,6 +511,7 @@ export default function TemplatesPage() {
                         setEmojiOffset(DEFAULT_EMOJI_OFFSET);
                         setEmojiSize(defaultEmojiSize(DEFAULT_WORD_SIZE));
                         setEmojiRotation(0);
+                        setEmojiBehind(false);
                         setSelectedLayer("word");
                       }}
                       className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
@@ -530,9 +537,39 @@ export default function TemplatesPage() {
               </div>
 
               {emoji && (
-                <p className="mb-3 text-right text-[11px] text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
-                  💡 גרור את האימוג'י על התצוגה למיקום חופשי — כל מקום שתרצה
-                </p>
+                <>
+                  <p className="mb-3 text-right text-[11px] text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
+                    💡 גרור את האימוג'י על התצוגה למיקום חופשי — כל מקום שתרצה
+                  </p>
+                  {/* Layer stacking toggle — front vs. behind the word. */}
+                  <div className="mb-3 flex items-center justify-end gap-2">
+                    <div className="flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+                      <button
+                        onClick={() => setEmojiBehind(false)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                          !emojiBehind
+                            ? "bg-white text-[color:var(--brand-green-dark)] shadow-sm dark:bg-gray-900 dark:text-[color:var(--brand-green)]"
+                            : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                        }`}
+                      >
+                        מלפנים
+                      </button>
+                      <button
+                        onClick={() => setEmojiBehind(true)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                          emojiBehind
+                            ? "bg-white text-[color:var(--brand-green-dark)] shadow-sm dark:bg-gray-900 dark:text-[color:var(--brand-green)]"
+                            : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                        }`}
+                      >
+                        מאחור
+                      </button>
+                    </div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      שכבת האימוג׳י
+                    </label>
+                  </div>
+                </>
               )}
 
               <div className="flex flex-wrap justify-end gap-2">
