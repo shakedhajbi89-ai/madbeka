@@ -253,7 +253,7 @@ export default async function Home() {
               </div>
               <div className="flex-none text-left">
                 <div className="text-3xl font-black leading-none text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
-                  ₪35
+                  ₪29
                 </div>
                 <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
                   חד-פעמי
@@ -264,7 +264,7 @@ export default async function Home() {
 
           <footer className="space-y-3 pt-8 text-xs text-gray-500 dark:text-gray-500">
             <div className="font-medium">
-              {PUBLIC_DOMAIN} · 3 מדבקות חינם · ₪35 לגישה מלאה
+              {PUBLIC_DOMAIN} · 3 מדבקות חינם · ₪29 לגישה מלאה
             </div>
             <nav
               className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-gray-600 dark:text-gray-400"

@@ -157,7 +157,7 @@ export default async function AccountPage() {
                   href="/?upgrade=1"
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[color:var(--brand-green)] to-[color:var(--brand-green-dark)] px-5 text-sm font-semibold text-white shadow-lg shadow-[color:var(--brand-green)]/30 transition-all hover:shadow-xl hover:shadow-[color:var(--brand-green)]/40"
                 >
-                  שדרג ל-₪35
+                  שדרג ל-₪29
                 </Link>
               )}
               <Link

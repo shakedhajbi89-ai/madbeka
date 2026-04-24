@@ -381,7 +381,7 @@ export function StickerMaker() {
             סיימת את 3 המדבקות החינמיות
           </h2>
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            ברכישה חד-פעמית של ₪35 תקבל מדבקות ללא הגבלה, בלי סימן מים,
+            ברכישה חד-פעמית של ₪29 תקבל מדבקות ללא הגבלה, בלי סימן מים,
             עם גישה לגלריה ולתבניות שלך.
           </p>
         </div>
@@ -405,7 +405,7 @@ export function StickerMaker() {
           onClick={goToCheckout}
           className="h-12 w-full bg-gradient-to-r from-[color:var(--brand-green)] to-[color:var(--brand-green-dark)] text-base font-semibold text-white shadow-lg shadow-[color:var(--brand-green)]/30 hover:shadow-xl hover:shadow-[color:var(--brand-green)]/40"
         >
-          שלם ₪35 והסר הגבלה
+          שלם ₪29 והסר הגבלה
         </Button>
         <button
           onClick={resetToIdle}

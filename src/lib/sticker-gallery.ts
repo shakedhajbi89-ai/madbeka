@@ -8,7 +8,7 @@
  * while staying 100% client-side.
  *
  * Trade-off: the gallery doesn't follow the user across devices. That's the
- * right call for a free/₪35-one-time product — users who need cross-device
+ * right call for a free/₪29-one-time product — users who need cross-device
  * sync can re-upload, and it keeps our data surface (and liability) tiny.
  */
 

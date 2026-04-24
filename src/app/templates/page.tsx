@@ -501,7 +501,7 @@ export default function TemplatesPage() {
     try {
       const res = await fetch("/api/stickers/log", { method: "POST" });
       if (res.status === 402) {
-        setNotice("סיימת את המדבקות החינמיות. שדרג ב-₪35.");
+        setNotice("סיימת את המדבקות החינמיות. שדרג ב-₪29.");
         return;
       }
       if (!res.ok) throw new Error("שגיאה ברישום");
