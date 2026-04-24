@@ -52,20 +52,17 @@ export type TextStickerFont =
 /** Horizontal anchor point for the text inside the 512×512 canvas. */
 export type TextStickerAlign = "center" | "right" | "left";
 
-/**
- * Where the emoji sits relative to the main word. `inline` (default) appends
- * the emoji to the text string so bidi does its thing (Hebrew word + emoji
- * to the left). The other three modes draw the emoji as a SEPARATE layer
- * so it can live above, below, or on the opposite side of the word.
- */
-export type EmojiPosition = "inline" | "above" | "below" | "flip";
-
 export interface TextStickerOptions {
   text: string;
   /** Emoji(s) picked from the emoji panel — stored separately from text so
-   *  we can position them independently (above / below / opposite side). */
+   *  the user can drag it around the canvas independently of the word. */
   emoji?: string;
-  emojiPos?: EmojiPosition;
+  /** Emoji position inside the 512×512 canvas. 0,0 = centered.
+   *  The user drags the emoji directly on the preview; this is where it
+   *  ends up. Default: slightly above center so the emoji starts visible
+   *  above the word the moment the user picks it. */
+  emojiOffsetX?: number;
+  emojiOffsetY?: number;
   style?: TextStickerStyle;
   font?: TextStickerFont;
   /** Max font size in px (auto-shrinks if the word doesn't fit). 40–300. */
@@ -76,9 +73,18 @@ export interface TextStickerOptions {
   align?: TextStickerAlign;
   /** Watermark-free output (paid users). */
   watermark?: boolean;
-  /** User-dragged offset inside the 512×512 canvas. 0,0 = centered. */
+  /** User-dragged offset of the main WORD inside the 512×512 canvas. 0,0 = centered. */
   offsetX?: number;
   offsetY?: number;
+}
+
+/**
+ * Visible footprint of the emoji on the canvas — the renderer and the hit
+ * tester have to agree on this, otherwise dragging feels off. Single source
+ * of truth so page.tsx can ask "what size is the emoji at font size N?"
+ */
+export function emojiSizeFor(fontSize: number): number {
+  return Math.round(fontSize * 0.9);
 }
 
 const GRADIENTS: Record<
@@ -419,12 +425,8 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
   const align: TextStickerAlign = opts.align ?? "center";
   const rotation = opts.rotation ?? 0;
   const emoji = opts.emoji ?? "";
-  const emojiPos: EmojiPosition = opts.emojiPos ?? "inline";
-  // Inline mode: glue the emoji into the text string so bidi handles layout
-  // (same as legacy behavior). Other modes: keep text pure, emoji drawn as
-  // a separate pass later.
-  const text =
-    emoji && emojiPos === "inline" ? `${opts.text}${emoji}` : opts.text;
+  // Text is always JUST the word — emoji is a separate draggable layer now.
+  const text = opts.text;
   const stack = fontStack(font);
 
   // The size slider is the single source of truth — no auto-shrink.
@@ -587,54 +589,32 @@ function paintCanvas(ctx: CanvasRenderingContext2D, opts: TextStickerOptions) {
     ctx.fillText(text, x, y);
   }
 
-  // Emoji-as-separate-layer pass. Runs only for above/below/flip — inline
-  // mode already baked the emoji into the text above. We use the system
-  // emoji font (Segoe UI Emoji on Windows, Apple Color Emoji on mac/iOS,
-  // Noto Color Emoji on Android) so the glyph renders in full color.
-  if (emoji && emojiPos !== "inline") {
-    // Measure the main word's width using its current font so we know where
-    // its edges are — needed for `flip` placement.
-    const wordMetrics = ctx.measureText(opts.text);
-    const wordWidth = wordMetrics.width;
+  ctx.restore();
 
-    // Emoji draw settings. Size ~90% of the text for visual balance.
-    const emojiSize = Math.round(fontSize * 0.9);
+  // Emoji layer — drawn INDEPENDENTLY of the word. Its own translate,
+  // its own position, no rotation (stays level even when the word tilts).
+  // This is what lets the user drag the emoji anywhere on the canvas
+  // without the word coming with it.
+  if (emoji) {
+    ctx.save();
+    const emojiX = (opts.emojiOffsetX ?? 0) + size / 2;
+    const emojiY = (opts.emojiOffsetY ?? 0) + size / 2;
+    ctx.translate(emojiX, emojiY);
+
+    const emojiSize = emojiSizeFor(fontSize);
     ctx.font = `${emojiSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // Soft shadow for emoji so it reads on any chat wallpaper just like the
-    // text does. Slightly lighter than the text's drop-shadow.
+    // Soft shadow so the emoji pops on any chat wallpaper.
     ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
     ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
-    ctx.fillStyle = "#000"; // Color doesn't matter for color-emoji glyphs.
+    ctx.fillStyle = "#000"; // Color is ignored for color-emoji glyphs.
 
-    // Horizontal anchor of the text itself (same logic as x above, but we
-    // re-compute from the word center rather than the string+emoji center).
-    let emojiX = 0;
-    let emojiY = 0;
-    const gap = fontSize * 0.15;
-
-    if (emojiPos === "above") {
-      // Sit above the word. y = negative because canvas y grows down.
-      emojiY = -(fontSize * 0.6) - emojiSize * 0.5 - gap;
-      emojiX = 0;
-    } else if (emojiPos === "below") {
-      emojiY = fontSize * 0.6 + emojiSize * 0.5 + gap;
-      emojiX = 0;
-    } else if (emojiPos === "flip") {
-      // Default bidi puts the emoji on the LEFT side of Hebrew text. `flip`
-      // flips it to the RIGHT of the word. Place it at word-right-edge + gap.
-      // With center alignment, word-right-edge = +wordWidth/2 relative to 0.
-      emojiX = wordWidth / 2 + emojiSize * 0.5 + gap;
-      emojiY = 0;
-    }
-
-    ctx.fillText(emoji, emojiX, emojiY);
+    ctx.fillText(emoji, 0, 0);
+    ctx.restore();
   }
-
-  ctx.restore();
 }
 
 /**

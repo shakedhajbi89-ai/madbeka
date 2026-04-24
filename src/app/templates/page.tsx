@@ -5,12 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UserButton, useAuth, SignUpButton } from "@clerk/nextjs";
 import {
   EMOJI_CATEGORIES,
+  emojiSizeFor,
   FONT_OPTIONS,
   fontStack,
   generateTextSticker,
   paintPreview,
   TEMPLATES,
-  type EmojiPosition,
   type TemplateDef,
   type TextStickerAlign,
   type TextStickerFont,
@@ -45,31 +45,27 @@ const ALIGN_OPTIONS: { id: TextStickerAlign; label: string; icon: string }[] = [
   { id: "left", label: "שמאל", icon: "⇤" },
 ];
 
-// Where the emoji sits relative to the word. Each icon is a mini visual
-// diagram so the user gets it at a glance, no reading required.
-const EMOJI_POS_OPTIONS: { id: EmojiPosition; label: string; icon: string }[] = [
-  { id: "inline", label: "ליד", icon: "😀א" },
-  { id: "above", label: "מעל", icon: "😀\nא" },
-  { id: "below", label: "מתחת", icon: "א\n😀" },
-  { id: "flip", label: "צד נגדי", icon: "א😀" },
-];
+// Initial position for the emoji when the user first picks one — places
+// it above the word so it's immediately visible (not hidden behind the
+// word). User can drag it anywhere from there.
+const DEFAULT_EMOJI_OFFSET = { x: 0, y: -130 };
 
 export default function TemplatesPage() {
   const { isSignedIn, isLoaded } = useAuth();
 
   // Editor state
   const [text, setText] = useState("יאללה");
-  // Emoji is tracked separately from the word so the user can position it
-  // relative to the word (above / below / opposite side) — not just append
-  // it into the text string. See EmojiPosition in @/lib/text-sticker.
+  // Emoji lives in its own state with its own position — it's a fully
+  // separate draggable layer on the canvas. The user grabs it with mouse
+  // or finger directly on the preview and moves it wherever they want.
   const [emoji, setEmoji] = useState("");
-  const [emojiPos, setEmojiPos] = useState<EmojiPosition>("inline");
+  const [emojiOffset, setEmojiOffset] = useState(DEFAULT_EMOJI_OFFSET);
   const [style, setStyle] = useState<TextStickerStyle>("classic");
   const [font, setFont] = useState<TextStickerFont>("marker");
   const [size, setSize] = useState(160);
   const [rotation, setRotation] = useState(0);
   const [align, setAlign] = useState<TextStickerAlign>("center");
-  // User-drag offset inside the 512×512 canvas. (0,0) = centered.
+  // User-drag offset of the main WORD inside the 512×512 canvas. (0,0) = centered.
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
   const previewRef = useRef<HTMLCanvasElement | null>(null);
@@ -90,7 +86,8 @@ export default function TemplatesPage() {
     const opts = {
       text: text || " ",
       emoji,
-      emojiPos,
+      emojiOffsetX: emojiOffset.x,
+      emojiOffsetY: emojiOffset.y,
       style,
       font,
       size,
@@ -102,7 +99,7 @@ export default function TemplatesPage() {
     };
     if (previewRef.current) paintPreview(previewRef.current, opts);
     if (zoomRef.current) paintPreview(zoomRef.current, opts);
-  }, [text, emoji, emojiPos, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
+  }, [text, emoji, emojiOffset.x, emojiOffset.y, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid, zoomed]);
 
   // Close zoom with Escape
   useEffect(() => {
@@ -139,7 +136,8 @@ export default function TemplatesPage() {
     return generateTextSticker({
       text: text || " ",
       emoji,
-      emojiPos,
+      emojiOffsetX: emojiOffset.x,
+      emojiOffsetY: emojiOffset.y,
       style,
       font,
       size,
@@ -149,7 +147,7 @@ export default function TemplatesPage() {
       offsetY: offset.y,
       watermark: shouldWatermark,
     });
-  }, [text, emoji, emojiPos, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
+  }, [text, emoji, emojiOffset.x, emojiOffset.y, style, font, size, rotation, align, offset.x, offset.y, status?.hasPaid]);
 
   const onDownload = useCallback(async () => {
     if (!isSignedIn) {
@@ -208,7 +206,7 @@ export default function TemplatesPage() {
   const applyTemplate = useCallback((t: TemplateDef) => {
     setText(t.text);
     setEmoji("");
-    setEmojiPos("inline");
+    setEmojiOffset(DEFAULT_EMOJI_OFFSET);
     setStyle(t.style);
     setFont(t.font);
     setRotation(t.rotation ?? 0);
@@ -219,15 +217,17 @@ export default function TemplatesPage() {
   }, []);
 
   // Drag-to-move on the preview canvas. Pointer events unify mouse + touch
-  // so iPhone and desktop both work with the same handlers. We track the
-  // initial click point relative to the current offset, then apply each
-  // subsequent move as offset = startOffset + (pointer - startPointer),
-  // scaled up from CSS px to the canvas's internal 512px coordinate space.
+  // so iPhone and desktop both work with the same handlers. On pointer down
+  // we hit-test: is the user grabbing the emoji (if present) or the word?
+  // Whichever got hit becomes the drag target and its offset gets updated
+  // on subsequent moves. This is what lets the user pick up JUST the emoji
+  // and drag it anywhere, independent of the word.
   const dragStart = useRef<{
+    target: "word" | "emoji";
     pointerX: number;
     pointerY: number;
-    offsetX: number;
-    offsetY: number;
+    startX: number;
+    startY: number;
     scale: number;
   } | null>(null);
 
@@ -238,16 +238,37 @@ export default function TemplatesPage() {
       // CSS pixel → internal 512px scale factor. Canvas is rendered at
       // rect.width CSS pixels, but its coordinate space is 512px.
       const scale = rect.width > 0 ? 512 / rect.width : 1;
+
+      // Pointer coords in canvas 512-space, origin at canvas CENTER.
+      const cx = (e.clientX - rect.left) * scale - 256;
+      const cy = (e.clientY - rect.top) * scale - 256;
+
+      // Hit-test emoji first (it's drawn on top of the word, so it wins).
+      // The emoji's on-canvas size matches the text fontSize, see
+      // emojiSizeFor. Its bounding box is that size square, centered at
+      // emojiOffset. We add a small touch-target pad for fingers.
+      let target: "word" | "emoji" = "word";
+      if (emoji) {
+        const half = emojiSizeFor(size) / 2 + 8;
+        if (
+          Math.abs(cx - emojiOffset.x) <= half &&
+          Math.abs(cy - emojiOffset.y) <= half
+        ) {
+          target = "emoji";
+        }
+      }
+
       dragStart.current = {
+        target,
         pointerX: e.clientX,
         pointerY: e.clientY,
-        offsetX: offset.x,
-        offsetY: offset.y,
+        startX: target === "emoji" ? emojiOffset.x : offset.x,
+        startY: target === "emoji" ? emojiOffset.y : offset.y,
         scale,
       };
       el.setPointerCapture(e.pointerId);
     },
-    [offset.x, offset.y],
+    [emoji, emojiOffset.x, emojiOffset.y, offset.x, offset.y, size],
   );
 
   const onPointerMoveCanvas = useCallback(
@@ -258,10 +279,13 @@ export default function TemplatesPage() {
       const dy = (e.clientY - start.pointerY) * start.scale;
       // Clamp so user can't drag the sticker entirely out of frame.
       const clamp = (v: number) => Math.max(-256, Math.min(256, v));
-      setOffset({
-        x: clamp(start.offsetX + dx),
-        y: clamp(start.offsetY + dy),
-      });
+      const newX = clamp(start.startX + dx);
+      const newY = clamp(start.startY + dy);
+      if (start.target === "emoji") {
+        setEmojiOffset({ x: newX, y: newY });
+      } else {
+        setOffset({ x: newX, y: newY });
+      }
     },
     [],
   );
@@ -450,25 +474,34 @@ export default function TemplatesPage() {
             </section>
 
             {/* Emoji picker — categories shown as chips with a sample emoji.
-                Click a category to expand its grid. Picked emojis live in
-                a dedicated `emoji` state and can be positioned independently
-                of the word (above / below / opposite side / inline). */}
+                Click a category to expand its grid. Picked emojis become a
+                standalone draggable layer on the canvas — the user grabs
+                them with mouse/finger and moves them independently. */}
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
               <div className="mb-3 flex items-center justify-between">
-                {/* Selected emoji(s) + delete button. Only shown when the user
-                    has actually picked something, so the UI stays clean. */}
+                {/* Selected emoji(s) + delete/recenter buttons. Only shown
+                    once the user has actually picked something. */}
                 {emoji ? (
-                  <button
-                    onClick={() => {
-                      setEmoji("");
-                      setEmojiPos("inline");
-                    }}
-                    className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
-                    title="הסר אימוג'י"
-                  >
-                    <span className="text-lg leading-none">{emoji}</span>
-                    <span className="text-xs">✕ הסר</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setEmoji("");
+                        setEmojiOffset(DEFAULT_EMOJI_OFFSET);
+                      }}
+                      className="flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-red-500 dark:hover:bg-red-950/40"
+                      title="הסר אימוג'י"
+                    >
+                      <span className="text-lg leading-none">{emoji}</span>
+                      <span className="text-xs">✕ הסר</span>
+                    </button>
+                    <button
+                      onClick={() => setEmojiOffset(DEFAULT_EMOJI_OFFSET)}
+                      className="rounded-xl border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                      title="החזר את האימוג'י למיקום ברירת המחדל"
+                    >
+                      🎯 מרכז
+                    </button>
+                  </div>
                 ) : (
                   <span />
                 )}
@@ -477,30 +510,10 @@ export default function TemplatesPage() {
                 </label>
               </div>
 
-              {/* Position selector — only makes sense once there's an emoji.
-                  Appears above the category chips so the user can change
-                  placement right after picking. */}
               {emoji && (
-                <div className="mb-3">
-                  <div className="mb-1.5 text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                    מיקום האימוג׳י
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    {EMOJI_POS_OPTIONS.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => setEmojiPos(p.id)}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
-                          emojiPos === p.id
-                            ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] shadow-sm dark:text-[color:var(--brand-green)]"
-                            : "border-gray-300 bg-white text-gray-800 hover:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <p className="mb-3 text-right text-[11px] text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
+                  💡 גרור את האימוג'י על התצוגה למיקום חופשי — כל מקום שתרצה
+                </p>
               )}
 
               <div className="flex flex-wrap justify-end gap-2">
@@ -534,12 +547,13 @@ export default function TemplatesPage() {
                           key={`${openEmojiCat}-${i}`}
                           onClick={() => {
                             // Append to the dedicated emoji state (not text).
-                            // Cap at 8 emojis — plenty for any sticker, avoids
-                            // overflow inside the canvas.
+                            // Cap at ~8 emojis — plenty for any sticker.
                             setEmoji((prev) => {
+                              // First pick: reset offset to default so the
+                              // new emoji appears above the word where the
+                              // user can see it (not hidden under it).
+                              if (!prev) setEmojiOffset(DEFAULT_EMOJI_OFFSET);
                               const combined = prev + e;
-                              // Rough cap via JS string length (emojis are
-                              // ~2 UTF-16 chars each).
                               return combined.length > 16
                                 ? combined.slice(0, 16)
                                 : combined;
@@ -553,7 +567,7 @@ export default function TemplatesPage() {
                     )}
                   </div>
                   <p className="mt-3 text-right text-[10px] text-gray-400">
-                    הקלקה מוסיפה אימוג׳י — ניתן למקם אותו מעל/מתחת/בצד
+                    הקלקה מוסיפה אימוג׳י — ניתן לגרור אותו לכל מקום בתצוגה
                   </p>
                 </div>
               )}
