@@ -306,11 +306,13 @@ export default function TemplatesPage() {
             thumb (on mobile) or eye (on desktop) lands on presets first,
             preview dominates the middle, controls sit on the left. */}
         {/* Desktop: grid fills all remaining vertical space in the viewport.
-            main is h-screen overflow-hidden so page never scrolls; this grid
-            grows to take what's left after header/title and its columns each
-            scroll internally. Preview stays put while user browses controls.
+            Columns stretch to grid row height (default align-items: stretch)
+            so their lg:overflow-y-auto actually produces scrollbars when
+            content exceeds the column height. main is h-screen overflow-hidden
+            so the page itself can't scroll — all scrolling happens inside the
+            columns, preview stays put.
             Mobile: columns stack, page flows normally. */}
-        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)] lg:items-start">
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[96px_minmax(0,640px)_minmax(280px,1fr)]">
           {/* Preset rail — moved to the far-right column (first in DOM in
               RTL context). Vertical strip on desktop, horizontal scroll on
               mobile. One tap loads a preset into the editor. */}
