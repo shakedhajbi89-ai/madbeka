@@ -26,9 +26,11 @@ export type TextStickerStyle =
   | "green" // green gradient fill (WhatsApp brand), black outline
   | "sunset" // orange→red gradient fill, black outline
   | "night" // blue→purple gradient fill, black outline
-  | "bubble" // balloon letters — huge outline makes glyphs look round & 3D
-  | "graffiti" // Tel Aviv street-wall spray paint — drips, shadows, gradient
-  | "neon"; // bright glow as if the letters are plugged into a wall
+  | "bubble" // 3D balloon letters with pink gradient, purple outline, highlights
+  | "graffiti" // Tel Aviv street-wall — spray fill, drips, splatter dots
+  | "neon" // bright glow as if the letters are plugged into a wall
+  | "pastel" // soft kawaii pastel pink, subtle shadow, no heavy outline
+  | "handwriting"; // thin ink-pen hand-drawn feel, minimal outline
 
 /**
  * Hebrew-friendly display faces available in the editor. Each one has a
@@ -47,7 +49,9 @@ export type TextStickerFont =
   | "karantina" // hand-drawn / graffiti feel for Hebrew
   | "frank-ruhl" // classical elegant Hebrew serif
   | "miriam" // modern Hebrew slab serif
-  | "bellefair"; // high-contrast display serif
+  | "bellefair" // high-contrast display serif
+  | "caveat" // Latin handwriting, cursive pen (handwriting style default)
+  | "rubik-wet"; // dripping spray-paint Rubik (graffiti style default, Latin)
 
 /** Horizontal anchor point for the text inside the 512×512 canvas. */
 export type TextStickerAlign = "center" | "right" | "left";
@@ -214,6 +218,12 @@ const FALLBACKS: Record<TextStickerFont, string> = {
   "frank-ruhl": `"Frank Ruhl Libre", "Times New Roman", serif`,
   miriam: `"Miriam Libre", "Georgia", serif`,
   bellefair: `"Bellefair", "Times New Roman", serif`,
+  // Caveat is Latin-only; Hebrew chars fall through to Karantina so the
+  // hand-drawn feel is preserved even in Hebrew-only stickers.
+  caveat: `"Caveat", "Karantina", "Arial Black", sans-serif`,
+  // Rubik Wet Paint is Latin-only; Hebrew falls through to Karantina for
+  // the street-art vibe, and to plain Rubik as a final safety net.
+  "rubik-wet": `"Rubik Wet Paint", "Karantina", "Rubik", sans-serif`,
 };
 
 const CSS_VAR: Record<TextStickerFont, string> = {
@@ -228,6 +238,8 @@ const CSS_VAR: Record<TextStickerFont, string> = {
   "frank-ruhl": "--font-frank-ruhl",
   miriam: "--font-miriam",
   bellefair: "--font-bellefair",
+  caveat: "--font-caveat",
+  "rubik-wet": "--font-rubik-wet",
 };
 
 export function fontStack(font: TextStickerFont): string {
@@ -265,7 +277,27 @@ export const FONT_OPTIONS: {
   { id: "frank-ruhl", label: "קלאסי", sample: "אבג" },
   { id: "miriam", label: "מרים", sample: "אבג" },
   { id: "bellefair", label: "בלפייר", sample: "abc" },
+  { id: "caveat", label: "כתב יד", sample: "abc" },
+  { id: "rubik-wet", label: "ספריי", sample: "abc" },
 ];
+
+/**
+ * Each visual style has a "best-paired" font — the font that most
+ * authentically carries that style's personality. When the user picks
+ * a style, the editor auto-switches to the matching font so the result
+ * looks right without needing a combo lookup. The user can still pick a
+ * different font after if they want to mix-and-match.
+ *
+ * Styles that are just color treatments (classic, black, gradients,
+ * neon) don't force a font — they let the user keep whatever typeface
+ * they had.
+ */
+export const STYLE_PREFERRED_FONT: Partial<Record<TextStickerStyle, TextStickerFont>> = {
+  graffiti: "karantina",
+  bubble: "suez",
+  pastel: "varela",
+  handwriting: "caveat",
+};
 
 /**
  * Emoji picker data — 8 curated categories, each with a sample emoji for
@@ -501,6 +533,8 @@ const BOLD_FONTS: ReadonlySet<TextStickerFont> = new Set([
   "karantina",
   "frank-ruhl",
   "miriam",
+  // Caveat has 500/700 loaded; 700 reads as proper handwriting bold.
+  "caveat",
 ]);
 
 /**
@@ -562,38 +596,177 @@ function drawWordLayer(
     ctx.fillStyle = "#000000";
     ctx.fillText(text, x, y);
   } else if (style === "bubble") {
-    ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 6;
-    ctx.lineWidth = Math.max(16, fontSize * 0.18);
-    ctx.strokeStyle = "#000000";
-    ctx.strokeText(text, x, y);
-    ctx.shadowColor = "transparent";
-    ctx.fillStyle = "#FF4FA3";
-    ctx.fillText(text, x, y);
-    ctx.lineWidth = Math.max(3, fontSize * 0.03);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.strokeText(text, x, y - fontSize * 0.04);
-  } else if (style === "graffiti") {
-    ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 8;
+    // 3D balloon letters. Thick purple outline, pink gradient fill with a
+    // lighter highlight strip near the top to simulate a glossy surface.
+    // Deep drop shadow gives the letters a floating, puffy feel.
+    ctx.shadowColor = "rgba(103, 58, 183, 0.45)";
+    ctx.shadowBlur = 22;
+    ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 10;
-    ctx.lineWidth = Math.max(12, fontSize * 0.1);
+
+    // Outer purple balloon outline — extra thick.
+    ctx.lineWidth = Math.max(20, fontSize * 0.22);
+    ctx.strokeStyle = "#6D28D9";
+    ctx.strokeText(text, x, y);
+
+    ctx.shadowColor = "transparent";
+
+    // Inner black contour for definition.
+    ctx.lineWidth = Math.max(8, fontSize * 0.08);
+    ctx.strokeStyle = "#1E1B4B";
+    ctx.strokeText(text, x, y);
+
+    // Main pink gradient fill — lighter top, darker bottom = 3D feel.
+    const bubbleMetrics = ctx.measureText(text);
+    const bAscent = bubbleMetrics.actualBoundingBoxAscent || fontSize * 0.7;
+    const bDescent = bubbleMetrics.actualBoundingBoxDescent || fontSize * 0.3;
+    const bubbleGrad = ctx.createLinearGradient(
+      0,
+      y - bAscent,
+      0,
+      y + bDescent,
+    );
+    bubbleGrad.addColorStop(0, "#FFB3D9");
+    bubbleGrad.addColorStop(0.45, "#FF6EB5");
+    bubbleGrad.addColorStop(1, "#E91E63");
+    ctx.fillStyle = bubbleGrad;
+    ctx.fillText(text, x, y);
+
+    // Glossy white highlight stripe near the top of the letters.
+    ctx.lineWidth = Math.max(4, fontSize * 0.04);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeText(text, x, y - fontSize * 0.14);
+  } else if (style === "graffiti") {
+    // Tel Aviv street-wall. Heavy black outline, spray-gradient fill,
+    // splatter particles, and drip lines running down from the bottom
+    // of each letter. We draw these *outside* the letter layer so they
+    // feel organic — not part of the typeface but sprayed AROUND it.
+    const graffMetrics = ctx.measureText(text);
+    const graffWidth = graffMetrics.width;
+    const graffAscent = graffMetrics.actualBoundingBoxAscent || fontSize * 0.7;
+    const graffDescent = graffMetrics.actualBoundingBoxDescent || fontSize * 0.3;
+
+    // --- Splatter particles: random dots around the text, set down
+    // before the letters so they sit behind them. Deterministic per text
+    // length so the layout stays stable between re-renders. ---
+    const seed = text.length * 7 + fontSize; // stable pseudo-random seed
+    const rng = (i: number) => {
+      const s = Math.sin(seed * 13 + i * 31) * 10000;
+      return s - Math.floor(s);
+    };
+    ctx.save();
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = "rgba(30, 30, 30, 0.65)";
+    for (let i = 0; i < 40; i++) {
+      const px = (rng(i) - 0.5) * (graffWidth + fontSize * 1.4);
+      const py =
+        (rng(i + 100) - 0.5) * (graffAscent + graffDescent + fontSize * 0.6);
+      const r = rng(i + 200) * fontSize * 0.06 + 1;
+      ctx.beginPath();
+      ctx.arc(x + px, y + py, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // --- Drip lines: vertical tails dripping down from inside the
+    // bounding box, simulating wet spray paint running. ---
+    ctx.save();
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.lineWidth = Math.max(2, fontSize * 0.025);
+    ctx.lineCap = "round";
+    const dripCount = 4;
+    for (let i = 0; i < dripCount; i++) {
+      const dx =
+        x + (rng(i + 300) - 0.5) * graffWidth * 0.85;
+      const dyStart = y + graffDescent * 0.4;
+      const dyEnd = dyStart + fontSize * (0.2 + rng(i + 400) * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(dx, dyStart);
+      ctx.lineTo(dx, dyEnd);
+      ctx.stroke();
+      // tiny drop at the tip
+      ctx.beginPath();
+      ctx.arc(dx, dyEnd, ctx.lineWidth * 0.9, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // --- Main letters: heavy black outline, yellow highlight stroke,
+    // pink→orange→cyan gradient fill, heavy offset shadow. ---
+    ctx.shadowColor = "rgba(0, 0, 0, 0.65)";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 10;
+    ctx.shadowOffsetY = 12;
+
+    // Chunky black wall-backing outline.
+    ctx.lineWidth = Math.max(16, fontSize * 0.14);
     ctx.strokeStyle = "#000000";
     ctx.strokeText(text, x, y);
+
     ctx.shadowColor = "transparent";
+
+    // Thin yellow "double-spray" layer.
     ctx.lineWidth = Math.max(6, fontSize * 0.05);
     ctx.strokeStyle = "#FFE63C";
     ctx.strokeText(text, x, y);
-    const metrics = ctx.measureText(text);
-    const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.7;
-    const descent = metrics.actualBoundingBoxDescent || fontSize * 0.3;
-    const grad = ctx.createLinearGradient(0, y - ascent, 0, y + descent);
-    grad.addColorStop(0, "#FF2D95");
-    grad.addColorStop(0.5, "#FF6B3D");
-    grad.addColorStop(1, "#00D8FF");
-    ctx.fillStyle = grad;
+
+    // Main spray fill — magenta → orange → cyan, Tel Aviv alley vibe.
+    const graffGrad = ctx.createLinearGradient(
+      0,
+      y - graffAscent,
+      0,
+      y + graffDescent,
+    );
+    graffGrad.addColorStop(0, "#FF2D95");
+    graffGrad.addColorStop(0.5, "#FF6B3D");
+    graffGrad.addColorStop(1, "#00D8FF");
+    ctx.fillStyle = graffGrad;
+    ctx.fillText(text, x, y);
+  } else if (style === "pastel") {
+    // Kawaii soft pastel — no heavy outline, gentle pink-to-lavender
+    // gradient fill, very soft drop shadow. Feels like a Hello Kitty /
+    // K-pop sticker. No stroke = focus stays on the color itself.
+    ctx.shadowColor = "rgba(236, 72, 153, 0.35)";
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 6;
+
+    // Very thin white underlay so edges read on dark wallpapers.
+    ctx.lineWidth = Math.max(3, fontSize * 0.025);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeText(text, x, y);
+
+    ctx.shadowColor = "transparent";
+
+    // Soft pink → lavender gradient fill.
+    const pastelMetrics = ctx.measureText(text);
+    const pAscent = pastelMetrics.actualBoundingBoxAscent || fontSize * 0.7;
+    const pDescent = pastelMetrics.actualBoundingBoxDescent || fontSize * 0.3;
+    const pastelGrad = ctx.createLinearGradient(0, y - pAscent, 0, y + pDescent);
+    pastelGrad.addColorStop(0, "#FFC5E3");
+    pastelGrad.addColorStop(0.55, "#F893C7");
+    pastelGrad.addColorStop(1, "#C084FC");
+    ctx.fillStyle = pastelGrad;
+    ctx.fillText(text, x, y);
+  } else if (style === "handwriting") {
+    // Pen-on-paper. No heavy outline, thin dark ink stroke for a
+    // handwritten feel. Works best with the Caveat font (Latin) or
+    // Karantina (Hebrew fallback) — the renderer doesn't force a font,
+    // the editor auto-switches via STYLE_PREFERRED_FONT.
+    ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 2;
+
+    // Thin dark ink stroke wrapping the glyph for a nib-pen feel.
+    ctx.lineWidth = Math.max(2, fontSize * 0.018);
+    ctx.strokeStyle = "#1E293B";
+    ctx.strokeText(text, x, y);
+
+    // Solid dark-ink fill — no gradient, keeps the pen-stroke purity.
+    ctx.fillStyle = "#0F172A";
     ctx.fillText(text, x, y);
   } else if (style === "neon") {
     const glow = "#00F5FF";

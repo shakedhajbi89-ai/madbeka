@@ -12,6 +12,8 @@ import {
   Frank_Ruhl_Libre,
   Miriam_Libre,
   Bellefair,
+  Caveat,
+  Rubik_Wet_Paint,
 } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
@@ -114,6 +116,27 @@ const bellefair = Bellefair({
   display: "swap",
 });
 
+// Caveat — Latin handwritten casual script. Used by the "handwriting"
+// sticker style for a personal, pen-on-paper vibe. Hebrew isn't in its
+// subset so the CSS fallback chain drops through to Karantina for Hebrew
+// chars, which keeps the hand-drawn energy even in Hebrew-only stickers.
+const caveat = Caveat({
+  variable: "--font-caveat",
+  subsets: ["latin"],
+  weight: ["500", "700"],
+  display: "swap",
+});
+
+// Rubik Wet Paint — dripping spray-paint look, built on the Rubik family.
+// Used by the "graffiti" sticker style for Latin; Hebrew falls back to
+// Karantina which covers the same hand-drawn street-art aesthetic.
+const rubikWetPaint = Rubik_Wet_Paint({
+  variable: "--font-rubik-wet",
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+});
+
 const SITE_TITLE = "Madbeka — מדבקות וואטסאפ בעברית";
 const SITE_DESCRIPTION =
   "עורך מדבקות וואטסאפ הישראלי הכי מהיר. כתוב בעברית, הוסף אימוג'ים, גרור כל אחד לבד, שלח לוואטסאפ — בלי אפליקציה, בלי הרשמה.";
@@ -188,6 +211,8 @@ export default function RootLayout({
           frankRuhl.variable,
           miriamLibre.variable,
           bellefair.variable,
+          caveat.variable,
+          rubikWetPaint.variable,
         )}
       >
         <head>

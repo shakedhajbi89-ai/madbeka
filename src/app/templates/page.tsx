@@ -12,6 +12,7 @@ import {
   paintPreview,
   SKIN_TONE_EMOJIS,
   SKIN_TONE_OPTIONS,
+  STYLE_PREFERRED_FONT,
   TEMPLATES,
   wordLayerHalfExtent,
   type EmojiLayer,
@@ -40,9 +41,11 @@ const STYLE_OPTIONS: { id: TextStickerStyle; label: string; swatch: string }[] =
   { id: "green", label: "ירוק", swatch: "#25D366" },
   { id: "sunset", label: "שקיעה", swatch: "#FF6B3D" },
   { id: "night", label: "לילה", swatch: "#7C3AED" },
-  { id: "bubble", label: "בועה", swatch: "#FF4FA3" },
+  { id: "bubble", label: "בועה 3D", swatch: "#FF6EB5" },
   { id: "graffiti", label: "גרפיטי", swatch: "#FF2D95" },
   { id: "neon", label: "נאון", swatch: "#00F5FF" },
+  { id: "pastel", label: "פסטל", swatch: "#FFC5E3" },
+  { id: "handwriting", label: "כתב יד", swatch: "#1E293B" },
 ];
 
 const ALIGN_OPTIONS: { id: TextStickerAlign; label: string; icon: string }[] = [
@@ -677,7 +680,20 @@ export default function TemplatesPage() {
                     {STYLE_OPTIONS.map((s) => (
                       <button
                         key={s.id}
-                        onClick={() => patchSelected({ style: s.id })}
+                        onClick={() => {
+                          // Styles with strong personality (graffiti,
+                          // bubble, pastel, handwriting) also need a
+                          // matching typeface to feel authentic. Auto-
+                          // switch the font when the style prefers one.
+                          // The user can still override afterwards via
+                          // the font picker.
+                          const prefFont = STYLE_PREFERRED_FONT[s.id];
+                          if (prefFont && prefFont !== selectedWord.font) {
+                            patchSelected({ style: s.id, font: prefFont });
+                          } else {
+                            patchSelected({ style: s.id });
+                          }
+                        }}
                         className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all ${
                           selectedWord.style === s.id
                             ? "border-[color:var(--brand-green)] bg-[color:var(--brand-green)]/10 text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]"
