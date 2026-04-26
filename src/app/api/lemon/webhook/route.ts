@@ -122,7 +122,50 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Verify the userId actually exists in our DB before applying the
+    // payment. If it doesn't, the UPDATE would silently affect 0 rows
+    // and the payment would be "lost" with no alert. Better to fail
+    // loudly so we can investigate (e.g. webhook fired for a Clerk
+    // user who never logged into Madbeka and was never row-created).
+    const existing = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: {
+        id: true,
+        hasPaid: true,
+        refunded: true,
+        paymentOrderId: true,
+      },
+    });
+    if (!existing) {
+      console.error("LS webhook: userId not found in DB — payment lost", {
+        userId,
+        eventName,
+        orderId,
+      });
+      // Still return 200 so LS doesn't retry forever — manual followup
+      // needed (check Vercel logs for this error).
+      return NextResponse.json({
+        ok: true,
+        warning: "user_not_in_db",
+      });
+    }
+
     if (eventName === "order_created") {
+      // Idempotency: if this exact orderId already credited this user
+      // (LS retried, or we got the webhook twice), return 200 without
+      // re-running the UPDATE.
+      if (
+        existing.hasPaid &&
+        existing.paymentOrderId === orderId &&
+        !existing.refunded
+      ) {
+        console.log("LS order_created skipped (idempotent)", {
+          userId,
+          orderId,
+        });
+        return NextResponse.json({ ok: true, idempotent: true });
+      }
+
       await db
         .update(users)
         .set({
@@ -138,6 +181,15 @@ export async function POST(req: NextRequest) {
         .where(eq(users.id, userId));
       console.log("LS order_created applied", { userId, orderId });
     } else if (eventName === "order_refunded") {
+      // Idempotency: if already refunded for this order, no-op.
+      if (existing.refunded && existing.paymentOrderId === orderId) {
+        console.log("LS order_refunded skipped (idempotent)", {
+          userId,
+          orderId,
+        });
+        return NextResponse.json({ ok: true, idempotent: true });
+      }
+
       await db
         .update(users)
         .set({
