@@ -316,20 +316,45 @@ export function StickerMaker() {
   }, [resultBlob]);
 
   /**
-   * Send the user to the Lemon Squeezy checkout with their Clerk user_id
-   * threaded through custom data, so our webhook can attribute the payment
-   * to the right account. success_url brings them back to /?paid=1 where the
-   * UI flips to the paid-success screen and refreshes hasPaid from the server.
+   * Send the user to the Lemon Squeezy checkout. Instead of putting the
+   * raw Clerk userId in the URL (where a buyer could swap in someone
+   * else's id and gift them paid status), we fetch a server-signed token
+   * — `<userId>.<hmac>` — and pass THAT through. The webhook re-verifies
+   * the signature before trusting the userId, so URL tampering is rejected.
+   *
+   * success_url brings them back to /?paid=1 where the UI flips to the
+   * paid-success screen and refreshes hasPaid from the server.
    */
-  const goToCheckout = useCallback(() => {
+  const goToCheckout = useCallback(async () => {
     const base = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL;
     if (!base || !userId) {
       setErrorMsg("לא ניתן להתחיל את התשלום כרגע. נסה שוב עוד רגע.");
       setStage("error");
       return;
     }
+
+    // Pull a fresh HMAC-signed token from our server before redirecting.
+    // The token is short-lived implicit (it carries the userId only) and
+    // does NOT need to be kept secret — it just needs to be unforgeable.
+    let token: string;
+    try {
+      const res = await fetch("/api/checkout/token", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`token request failed: ${res.status}`);
+      const data = (await res.json()) as { token?: string };
+      if (!data.token) throw new Error("no token in response");
+      token = data.token;
+    } catch (err) {
+      console.error("checkout token fetch failed:", err);
+      setErrorMsg("לא ניתן להתחיל את התשלום כרגע. נסה שוב עוד רגע.");
+      setStage("error");
+      return;
+    }
+
     const url = new URL(base);
-    url.searchParams.set("checkout[custom][user_id]", userId);
+    url.searchParams.set("checkout[custom][user_token]", token);
     url.searchParams.set(
       "checkout[success_url]",
       `${window.location.origin}/?paid=1`,

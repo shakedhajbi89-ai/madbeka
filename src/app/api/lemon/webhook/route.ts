@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, users } from "@/lib/db";
+import { verifyCheckoutToken } from "@/lib/checkout-token";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +15,14 @@ export const dynamic = "force-dynamic";
  * with LEMON_SQUEEZY_WEBHOOK_SECRET — requests without a valid signature
  * are rejected before any DB side effects.
  *
- * The user_id is carried through Lemon Squeezy via checkout custom data:
- *   ?checkout[custom][user_id]=<clerk_user_id>
- * which LS echoes back as meta.custom_data.user_id in the webhook payload.
+ * The user is identified via a server-signed HMAC token in the checkout
+ * custom data:
+ *   ?checkout[custom][user_token]=<userId>.<hmac>
+ * The webhook verifies the HMAC before trusting the userId, so a buyer
+ * who edits the checkout URL to gift another account paid status is
+ * rejected here. (Legacy `user_id` raw field is still accepted for
+ * orders created before this change rolled out — they were never an
+ * attack surface in practice.)
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.LEMON_SQUEEZY_WEBHOOK_SECRET;
@@ -71,14 +77,44 @@ export async function POST(req: NextRequest) {
   }
 
   const eventName = payload.meta?.event_name;
-  const userId = payload.meta?.custom_data?.user_id;
   const orderId = payload.data?.id;
   const totalCents = payload.data?.attributes?.total;
 
+  // Resolve the userId. New flow: signed `user_token` whose HMAC we verify
+  // before trusting it. Legacy flow: raw `user_id` (kept for orders that
+  // were initiated before this change shipped). If both are present, the
+  // signed token wins and the legacy field is ignored.
+  const rawUserToken = payload.meta?.custom_data?.user_token;
+  const legacyUserId = payload.meta?.custom_data?.user_id;
+  let userId: string | null = null;
+
+  if (rawUserToken) {
+    userId = verifyCheckoutToken(rawUserToken);
+    if (!userId) {
+      // Token present but signature invalid — that's an attack attempt
+      // (someone tampered with the checkout URL). Reject hard so the
+      // payment is NOT credited to any account.
+      console.warn("LS webhook: invalid user_token signature", {
+        eventName,
+        orderId,
+      });
+      return NextResponse.json(
+        { error: "invalid_user_token" },
+        { status: 401 },
+      );
+    }
+  } else if (legacyUserId) {
+    userId = legacyUserId;
+    console.log("LS webhook using legacy user_id field", {
+      eventName,
+      orderId,
+    });
+  }
+
   if (!userId) {
-    // Missing custom data — likely a manual order or misconfigured checkout
-    // URL. Return 200 so LS doesn't retry forever, but log it.
-    console.warn("LS webhook missing user_id in custom_data", {
+    // No identification at all — probably a manual order or misconfigured
+    // checkout URL. Return 200 so LS doesn't retry forever, but log it.
+    console.warn("LS webhook missing user_token/user_id in custom_data", {
       eventName,
       orderId,
     });
@@ -127,7 +163,12 @@ export async function POST(req: NextRequest) {
 interface LemonWebhookPayload {
   meta?: {
     event_name?: string;
-    custom_data?: { user_id?: string };
+    custom_data?: {
+      /** Server-signed token: `<userId>.<hmacHex>`. Preferred. */
+      user_token?: string;
+      /** Legacy raw userId — kept for in-flight orders only. */
+      user_id?: string;
+    };
   };
   data?: {
     id?: string;
