@@ -43,3 +43,18 @@ next-env.d.ts
 .vercel
 .env*.local
 .claude/worktrees/
+
+# Capacitor / Android — commit the source, ignore build artifacts.
+# Local dev paths Android Studio writes (machine-specific).
+android/app/build/
+android/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/app/release/
+android/app/debug/
+*.keystore
+*.jks
+# APK/AAB outputs — never committed (they're huge and signed-per-machine)
+*.apk
+*.aab
