@@ -38,12 +38,17 @@ const imglyConnect = "https://staticimgly.com";
 const csp = [
   "default-src 'self'",
   // Scripts: self + Clerk + Google Analytics/Tag Manager.
-  // - 'wasm-unsafe-eval' lets @imgly instantiate the bg-removal WASM
-  //   module without falling back to the legacy 'unsafe-eval' grant.
-  // - blob: lets @imgly do `import("blob:...")` on its WASM worker
-  //   module. Without it the model load fails with
-  //   "Failed to fetch dynamically imported module: blob:...".
-  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: ${clerkScriptSrc} https://www.googletagmanager.com`,
+  // - 'wasm-unsafe-eval' for @imgly's WASM module instantiation.
+  // - 'unsafe-eval' because @imgly's ONNX runtime evaluates JS strings
+  //   (`new Function(...)`) when bootstrapping the inference backend.
+  //   Without it the model load fails with EvalError. We accept this
+  //   weakening because (a) bg removal runs entirely client-side on
+  //   user-supplied images, (b) we don't fetch user-controlled JS, and
+  //   (c) the alternative would be a server-side rewrite that breaks
+  //   the privacy promise ("רץ במכשיר שלך — לא בענן").
+  // - blob: lets @imgly do `import("blob:...")` on its compiled WASM
+  //   worker module — without it the dynamic import is rejected.
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: ${clerkScriptSrc} https://www.googletagmanager.com`,
   // Styles: self + inline (Tailwind/shadcn) + Google Fonts
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   // Fonts: self + Google Fonts CDN
