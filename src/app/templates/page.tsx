@@ -413,13 +413,29 @@ export default function TemplatesPage() {
   // Background removal (browser-side WASM, no server).
   const [isRemovingBg, setIsRemovingBg] = useState(false);
   const removeBackgroundFromSelected = useCallback(async () => {
-    if (!selectedImage) return;
+    // Always log entry — earlier diagnostic versions returned silently
+    // when no image was selected, which made the button feel broken.
+    console.log("[bg-removal] click", {
+      hasSelectedImage: !!selectedImage,
+      selectedId,
+      layerCount: layers.length,
+    });
+    if (!selectedImage) {
+      // Surface the reason so the user knows what to do, instead of
+      // having the button appear unresponsive.
+      setNotice("תבחר קודם שכבת תמונה ברשימת השכבות, ואז לחץ על 'הסר רקע'.");
+      return;
+    }
     setIsRemovingBg(true);
     setNotice("מסיר רקע... הפעם הראשונה עשויה לקחת דקה (הורדת המודל).");
     try {
+      console.log("[bg-removal] importing @imgly/background-removal...");
       const { removeBackground } = await import("@imgly/background-removal");
+      console.log("[bg-removal] fetching blob from", selectedImage.src.slice(0, 60));
       const inputBlob = await (await fetch(selectedImage.src)).blob();
+      console.log("[bg-removal] running model on blob size", inputBlob.size);
       const resultBlob = await removeBackground(inputBlob);
+      console.log("[bg-removal] success, output size", resultBlob.size);
 
       const newDataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -448,7 +464,7 @@ export default function TemplatesPage() {
     } finally {
       setIsRemovingBg(false);
     }
-  }, [selectedImage, updateLayer]);
+  }, [selectedImage, selectedId, layers.length, updateLayer]);
 
   // Preset click — wipes the stack and seeds with one word layer.
   const applyTemplate = useCallback((t: TemplateDef) => {
