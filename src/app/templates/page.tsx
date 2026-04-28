@@ -441,8 +441,34 @@ export default function TemplatesPage() {
     try {
       console.log("[bg-removal] importing @imgly/background-removal...");
       const { removeBackground } = await import("@imgly/background-removal");
-      console.log("[bg-removal] fetching blob from", target.src.slice(0, 60));
-      const inputBlob = await (await fetch(target.src)).blob();
+      // Decode data: URLs locally instead of round-tripping through fetch().
+      // CSP `connect-src` doesn't allow `data:` (and we don't want to add
+      // it — it'd defeat the protection), so a fetch() call on a base64
+      // data URL throws "Refused to connect". This branch handles both
+      // data: URLs (post-paste / post-bg-removal layers) and blob: URLs
+      // (fresh uploads via createObjectURL) without ever touching fetch.
+      console.log("[bg-removal] preparing blob from", target.src.slice(0, 30));
+      let inputBlob: Blob;
+      if (target.src.startsWith("data:")) {
+        const commaIdx = target.src.indexOf(",");
+        const header = target.src.slice(5, commaIdx); // strip "data:"
+        const isBase64 = header.endsWith(";base64");
+        const mime = isBase64 ? header.slice(0, -7) : header;
+        const payload = target.src.slice(commaIdx + 1);
+        if (isBase64) {
+          const binary = atob(payload);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          inputBlob = new Blob([bytes], { type: mime || "image/png" });
+        } else {
+          inputBlob = new Blob([decodeURIComponent(payload)], {
+            type: mime || "text/plain",
+          });
+        }
+      } else {
+        // blob:/http(s) URLs — fetch is allowed and necessary.
+        inputBlob = await (await fetch(target.src)).blob();
+      }
       console.log("[bg-removal] running model on blob size", inputBlob.size);
       const resultBlob = await removeBackground(inputBlob);
       console.log("[bg-removal] success, output size", resultBlob.size);
