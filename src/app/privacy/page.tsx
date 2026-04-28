@@ -14,7 +14,11 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="מדיניות פרטיות" lastUpdated="20 באפריל 2026">
+    <LegalPage
+      title="מדיניות פרטיות"
+      kicker="Privacy Policy"
+      lastUpdated="20 באפריל 2026"
+    >
       <h2>1. מי אנחנו</h2>
       <p>
         שירות {BRAND_NAME} ({PUBLIC_DOMAIN}) מופעל על ידי {LEGAL_OWNER_NAME},

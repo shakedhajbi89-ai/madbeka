@@ -9,7 +9,11 @@ export const metadata: Metadata = {
 
 export default function RefundPage() {
   return (
-    <LegalPage title="מדיניות החזרים" lastUpdated="20 באפריל 2026">
+    <LegalPage
+      title="מדיניות החזרים"
+      kicker="Refund Policy"
+      lastUpdated="20 באפריל 2026"
+    >
       <h2>הגישה לחינם לפני הרכישה</h2>
       <p>
         כל משתמש רשאי לייצר עד 3 מדבקות בחינם לפני שהוא משלם — כדי לבדוק את

@@ -1,62 +1,198 @@
 import Link from "next/link";
+import { Clock, Sticker as StickerIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
  * Shared shell for the 3 legal pages (/terms, /privacy, /refund).
  *
- * All three docs share the same chrome (back link, brand chip, title,
- * last-updated stamp) — keeping it in one place so a policy update touches
- * one file, and so the three pages feel like one document set.
+ * All three docs share the same chrome — Playful header, kicker pill,
+ * Karantina H1, "last updated" stamp — keeping policy updates a single-
+ * file change. Body content is styled via descendant selectors so each
+ * page can stay pure prose (h2/p/ul/a tags only).
  *
- * `lastUpdated` is a free-form Hebrew string (e.g. "20 באפריל 2026") because
- * legal-facing users recognise formatted dates faster than ISO strings.
+ * `kicker` is the English label that sits in a paper pill above the title
+ * (e.g. "Privacy Policy" / "Terms of Service" / "Refund Policy").
+ * `lastUpdated` is a free-form Hebrew string (e.g. "20 באפריל 2026")
+ * because legal-facing users recognise formatted dates faster than ISO.
  */
 export function LegalPage({
   title,
+  kicker,
   lastUpdated,
   children,
 }: {
   title: string;
+  kicker?: string;
   lastUpdated: string;
   children: ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen flex-col items-center bg-gradient-to-b from-white to-gray-50 px-6 py-6">
-      <div className="w-full max-w-2xl space-y-6">
-        <header className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-block rounded-xl border-2 border-white bg-black px-3 py-1 text-xl font-black text-white shadow-md"
-          >
-            Madbeka
+    <main
+      dir="rtl"
+      className="relative min-h-screen text-ink"
+      style={{
+        background: "var(--cream)",
+        fontFamily: "'Assistant', system-ui, sans-serif",
+      }}
+    >
+      <div className="mx-auto max-w-3xl px-6 py-6 lg:px-8">
+        {/* Header */}
+        <header className="mb-10 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <div
+              className="grid h-11 w-11 place-items-center rounded-[14px] text-cream"
+              style={{
+                background: "var(--ink)",
+                transform: "rotate(-6deg)",
+                boxShadow: "0 4px 0 var(--wa)",
+              }}
+            >
+              <StickerIcon size={22} strokeWidth={2.4} />
+            </div>
+            <div
+              className="text-2xl leading-none"
+              style={{
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontWeight: 700,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Madbeka
+            </div>
           </Link>
           <Link
             href="/"
-            className="text-sm font-medium text-gray-700 hover:text-black"
+            className="text-sm font-extrabold"
+            style={{ color: "var(--ink)" }}
           >
-            חזרה לדף הבית
+            ← חזרה לדף הבית
           </Link>
         </header>
 
-        <div className="space-y-2 pt-2 text-right">
-          <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+        {/* Doc heading */}
+        <div className="mb-8">
+          {kicker && (
+            <div
+              className="mb-3 inline-block px-3 py-1"
+              style={{
+                background: "var(--paper)",
+                border: "2px solid var(--ink)",
+                borderRadius: 100,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "var(--ink)",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                boxShadow: "2px 3px 0 var(--ink)",
+              }}
+            >
+              {kicker}
+            </div>
+          )}
+          <h1
+            style={{
+              fontFamily: "'Karantina', 'Heebo', sans-serif",
+              fontWeight: 700,
+              fontSize: 64,
+              lineHeight: 0.92,
+              letterSpacing: "-0.025em",
+              color: "var(--ink)",
+            }}
+          >
             {title}
           </h1>
-          <p className="text-xs text-gray-500">עדכון אחרון: {lastUpdated}</p>
+          <div
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              opacity: 0.55,
+            }}
+          >
+            <Clock size={13} />
+            עודכן {lastUpdated}
+          </div>
         </div>
 
+        {/* Body */}
         <article
-          className="
-            space-y-5 rounded-2xl border border-gray-200 bg-white p-6 text-right text-sm leading-7 text-gray-800
-            [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-gray-900
-            [&_h2:first-child]:mt-0
-            [&_p]:text-gray-700
-            [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pr-5 [&_ul]:text-gray-700
-            [&_a]:text-[color:var(--brand-green)] [&_a]:underline
-          "
+          className="space-y-5 p-7 text-right text-[16px] leading-[1.7]"
+          style={{
+            background: "#fff",
+            border: "2.5px solid var(--ink)",
+            borderRadius: 18,
+            boxShadow: "5px 6px 0 var(--ink)",
+          }}
         >
-          {children}
+          <div
+            className="
+              [&_h2]:mb-3 [&_h2]:mt-6 [&_h2:first-child]:mt-0
+              [&_p]:my-0 [&_p+p]:mt-3
+              [&_ul]:my-2 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pr-5
+              [&_a]:font-extrabold [&_a]:underline
+            "
+            style={
+              {
+                color: "var(--ink)",
+                "--legal-h2-color": "var(--ink)",
+              } as React.CSSProperties
+            }
+          >
+            <style>
+              {`
+                article h2 {
+                  font-family: 'Karantina', 'Heebo', sans-serif;
+                  font-weight: 700;
+                  font-size: 28px;
+                  letter-spacing: -0.01em;
+                  line-height: 1.1;
+                  color: var(--ink);
+                }
+                article a {
+                  color: var(--wa-dark);
+                  text-decoration-style: dashed;
+                }
+                article a:hover {
+                  color: var(--wa);
+                }
+              `}
+            </style>
+            {children}
+          </div>
         </article>
+
+        {/* Footer */}
+        <footer
+          className="mt-10 flex flex-wrap items-center gap-4 pt-6 text-[13px] font-extrabold"
+          style={{
+            borderTop: "1.5px dashed var(--ink)",
+          }}
+        >
+          <Link
+            href="/privacy"
+            style={{ color: "var(--ink)", opacity: 0.7 }}
+            className="hover:underline"
+          >
+            פרטיות
+          </Link>
+          <Link
+            href="/terms"
+            style={{ color: "var(--ink)", opacity: 0.7 }}
+            className="hover:underline"
+          >
+            תקנון
+          </Link>
+          <Link
+            href="/refund"
+            style={{ color: "var(--ink)", opacity: 0.7 }}
+            className="hover:underline"
+          >
+            החזרים
+          </Link>
+          <span className="ms-auto" style={{ opacity: 0.5 }}>
+            © 2026 Madbeka
+          </span>
+        </footer>
       </div>
     </main>
   );

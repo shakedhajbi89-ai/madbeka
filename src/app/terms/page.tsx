@@ -14,7 +14,11 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <LegalPage title="תנאי שימוש" lastUpdated="20 באפריל 2026">
+    <LegalPage
+      title="תנאי שימוש"
+      kicker="Terms of Service"
+      lastUpdated="20 באפריל 2026"
+    >
       <h2>1. כללי</h2>
       <p>
         ברוך הבא ל-{BRAND_NAME} (להלן &quot;השירות&quot;), מחולל מדבקות וואטסאפ
