@@ -413,17 +413,27 @@ export default function TemplatesPage() {
   // Background removal (browser-side WASM, no server).
   const [isRemovingBg, setIsRemovingBg] = useState(false);
   const removeBackgroundFromSelected = useCallback(async () => {
-    // Always log entry — earlier diagnostic versions returned silently
-    // when no image was selected, which made the button feel broken.
+    // Resolve the target image: prefer the currently selected layer,
+    // fall back to the topmost image layer in the stack. This makes the
+    // "Remove background" action forgiving — users instinctively click it
+    // after uploading without first selecting the layer in the sidebar.
+    let target = selectedImage;
+    if (!target) {
+      const fallback = [...layers]
+        .reverse()
+        .find((l): l is ImageLayer => l.type === "image");
+      if (fallback) {
+        target = fallback;
+        setSelectedId(fallback.id);
+      }
+    }
     console.log("[bg-removal] click", {
       hasSelectedImage: !!selectedImage,
-      selectedId,
+      resolvedTarget: target?.id ?? null,
       layerCount: layers.length,
     });
-    if (!selectedImage) {
-      // Surface the reason so the user knows what to do, instead of
-      // having the button appear unresponsive.
-      setNotice("תבחר קודם שכבת תמונה ברשימת השכבות, ואז לחץ על 'הסר רקע'.");
+    if (!target) {
+      setNotice("אין תמונה. העלה תמונה קודם, ואז לחץ על 'הסר רקע'.");
       return;
     }
     setIsRemovingBg(true);
@@ -431,8 +441,8 @@ export default function TemplatesPage() {
     try {
       console.log("[bg-removal] importing @imgly/background-removal...");
       const { removeBackground } = await import("@imgly/background-removal");
-      console.log("[bg-removal] fetching blob from", selectedImage.src.slice(0, 60));
-      const inputBlob = await (await fetch(selectedImage.src)).blob();
+      console.log("[bg-removal] fetching blob from", target.src.slice(0, 60));
+      const inputBlob = await (await fetch(target.src)).blob();
       console.log("[bg-removal] running model on blob size", inputBlob.size);
       const resultBlob = await removeBackground(inputBlob);
       console.log("[bg-removal] success, output size", resultBlob.size);
@@ -451,8 +461,8 @@ export default function TemplatesPage() {
         newImg.src = newDataUrl;
       });
 
-      imageCache.current.set(selectedImage.id, newImg);
-      updateLayer(selectedImage.id, { src: newDataUrl });
+      imageCache.current.set(target.id, newImg);
+      updateLayer(target.id, { src: newDataUrl });
       setImageTick((t) => t + 1);
       setNotice("הרקע הוסר בהצלחה.");
     } catch (err) {
@@ -977,7 +987,11 @@ export default function TemplatesPage() {
                 <ActionChip
                   icon={<Sparkles size={13} />}
                   label={isRemovingBg ? "מסיר..." : "הסר רקע"}
-                  disabled={!selectedImage || isRemovingBg}
+                  // Enabled if there's ANY image layer in the stack — the
+                  // handler falls back to the topmost image when nothing
+                  // is currently selected, so we shouldn't gate on the
+                  // user remembering to click the layer first.
+                  disabled={!layers.some((l) => l.type === "image") || isRemovingBg}
                   onClick={removeBackgroundFromSelected}
                 />
               </ChipsRow>
