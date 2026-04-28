@@ -24,7 +24,9 @@ import { GoogleAnalytics } from "@/components/google-analytics";
 import { SplashScreen } from "@/components/splash-screen";
 import { SwRegistrar } from "@/components/sw-registrar";
 import { PUBLIC_URL } from "@/lib/brand";
-import { clerkAppearance } from "@/lib/clerk-theme";
+// Clerk theme temporarily disabled — caused Internal Server Error in
+// production. Will re-enable after debugging the Appearance shape.
+// import { clerkAppearance } from "@/lib/clerk-theme";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -194,7 +196,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider localization={heIL} appearance={clerkAppearance}>
+    <ClerkProvider localization={heIL}>
       <html
         lang="he"
         dir="rtl"
