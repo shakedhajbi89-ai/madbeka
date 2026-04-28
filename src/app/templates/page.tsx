@@ -439,7 +439,11 @@ export default function TemplatesPage() {
       updateLayer(selectedImage.id, { src: newDataUrl });
       setImageTick((t) => t + 1);
       setNotice("הרקע הוסר בהצלחה.");
-    } catch {
+    } catch (err) {
+      // Surface the underlying error in DevTools — the user-facing notice
+      // is intentionally generic, but without this log we have no way to
+      // tell whether it's CSP, network, WASM, or a model-format issue.
+      console.error("[bg-removal] failed:", err);
       setNotice("לא הצלחנו להסיר את הרקע. נסה תמונה אחרת.");
     } finally {
       setIsRemovingBg(false);

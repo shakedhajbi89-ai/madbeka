@@ -45,8 +45,10 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   // Fonts: self + Google Fonts CDN
   "font-src 'self' data: https://fonts.gstatic.com",
-  // Images: self + data URIs + blob (canvas export) + GA pixel
-  "img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com",
+  // Images: self + data URIs + blob (canvas export) + GA pixel +
+  // Clerk profile pics (img.clerk.com is where uploaded avatars live;
+  // *.clerk.com covers OAuth-fetched images from Google/Apple).
+  "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com https://www.google-analytics.com https://www.googletagmanager.com",
   // Connect: self + Clerk API + GA/GTM + imgly model CDN
   `connect-src 'self' ${clerkConnectSrc} ${imglyConnect} https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com`,
   // Frames: Clerk auth iframes only (no clickjacking)
