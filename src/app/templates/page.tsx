@@ -174,6 +174,18 @@ export default function TemplatesPage() {
   const [zoomed, setZoomed] = useState(false);
   const [openEmojiCat, setOpenEmojiCat] = useState<string | null>(null);
 
+  // Post-share / post-download instructions modal. WhatsApp doesn't expose
+  // a "send as sticker" web intent, so we always end up sending a .webp
+  // attachment which the user has to long-press → "Add to Stickers". The
+  // modal walks through the platform-specific steps so it doesn't feel like
+  // an "ואז ואז ואז" experience.
+  const [postActionModal, setPostActionModal] = useState<
+    | { kind: "shared" }
+    | { kind: "fallback" }
+    | { kind: "downloaded" }
+    | null
+  >(null);
+
   const previewRef = useRef<HTMLCanvasElement | null>(null);
   const zoomRef = useRef<HTMLCanvasElement | null>(null);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -563,7 +575,9 @@ export default function TemplatesPage() {
       const blob = await renderCurrent();
       downloadBlob(blob, `madbeka-${primaryLabel}.webp`);
       void saveToGallery(blob, primaryLabel);
+      setPostActionModal({ kind: "downloaded" });
     } catch (err) {
+      console.error("[download] failed:", err);
       setNotice(err instanceof Error ? err.message : "משהו השתבש בהורדה.");
     } finally {
       setWorking(null);
@@ -578,15 +592,15 @@ export default function TemplatesPage() {
       void saveToGallery(blob, primaryLabel);
       const result = await shareStickerToWhatsApp(blob);
       if (result === "shared") {
-        setNotice(
-          "נשלח! בצ'אט וואטסאפ: לחץ לחיצה ארוכה על התמונה → \"הוסף למדבקות\" (אנדרואיד) / \"הוסף למועדפות\" (iOS).",
-        );
+        setPostActionModal({ kind: "shared" });
       } else if (result === "fallback") {
-        setNotice("פתחנו לך וואטסאפ Web. הורד ושתף מהנייד.");
+        setPostActionModal({ kind: "fallback" });
       } else if (result === "unsupported") {
-        setNotice("הדפדפן לא תומך בשיתוף ישיר. הורד ושתף ידנית.");
+        setNotice("הדפדפן לא תומך בשיתוף ישיר. נסה להוריד ולשתף ידנית.");
       }
-    } catch {
+      // "cancelled" → user dismissed share sheet; stay quiet, no modal.
+    } catch (err) {
+      console.error("[share] failed:", err);
       setNotice("השיתוף נכשל. נסה שוב.");
     } finally {
       setWorking(null);
@@ -1568,6 +1582,20 @@ export default function TemplatesPage() {
           </div>
         )}
 
+        {/* POST-ACTION MODAL — instructions for turning the .webp file
+            into an actual WhatsApp sticker, since the platform doesn't
+            expose a "send as sticker" intent on the web. */}
+        {postActionModal && (
+          <PostActionModal
+            kind={postActionModal.kind}
+            onClose={() => setPostActionModal(null)}
+            onDownload={() => {
+              setPostActionModal(null);
+              void onDownload();
+            }}
+          />
+        )}
+
         <footer
           className="mt-8 pt-6 text-center text-[11px] font-bold"
           style={{
@@ -1583,10 +1611,238 @@ export default function TemplatesPage() {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Local atoms — small, opinionated, scoped to this page.
-   They embed the Playful design system: hard offset shadow, ink
-   border, and `press-active` for the pushed-in effect.
+   Platform detection — used by the post-action modal to show
+   iOS-vs-Android-vs-desktop instructions. Browser-only; defaults to
+   "desktop" on the server.
    ──────────────────────────────────────────────────────────────── */
+
+type Platform = "ios" | "android" | "desktop";
+
+function detectPlatform(): Platform {
+  if (typeof navigator === "undefined") return "desktop";
+  const ua = navigator.userAgent || "";
+  if (/iPad|iPhone|iPod/.test(ua)) return "ios";
+  if (/Android/i.test(ua)) return "android";
+  return "desktop";
+}
+
+/* ────────────────────────────────────────────────────────────────
+   PostActionModal — shown after share / download.
+   WhatsApp doesn't accept stickers via Web Share, so a .webp file
+   ends up as an image attachment that the user has to convert in
+   the WhatsApp UI. This modal walks them through the steps with
+   platform-specific copy.
+   ──────────────────────────────────────────────────────────────── */
+
+function PostActionModal({
+  kind,
+  onClose,
+  onDownload,
+}: {
+  kind: "shared" | "fallback" | "downloaded";
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  const [platform, setPlatform] = useState<Platform>("desktop");
+  useEffect(() => {
+    setPlatform(detectPlatform());
+  }, []);
+
+  const headline =
+    kind === "shared"
+      ? "המדבקה נשלחה!"
+      : kind === "fallback"
+        ? "שולחים מהדסקטופ?"
+        : "המדבקה נשמרה במכשיר!";
+
+  const subhead =
+    kind === "fallback"
+      ? "ל-WhatsApp Web אין אפשרות לשלוח מדבקות ישירות. שני פתרונות:"
+      : "כדי שתופיע כמדבקה (ולא כתמונה רגילה) ב-WhatsApp:";
+
+  // Steps depend on both kind + platform.
+  const steps: string[] = (() => {
+    if (kind === "fallback") {
+      return [
+        "תוריד את הקובץ ('הורד' למעלה) ושלח אותו לעצמך בוואטסאפ.",
+        "במובייל, פתח את הצ'אט שאליו שלחת את הקובץ.",
+        "לחץ לחיצה ארוכה על המדבקה.",
+        platform === "ios"
+          ? "בחר 'הוסף למועדפות' — היא תופיע במאגר המדבקות שלך."
+          : "בחר 'הוסף למדבקות' — היא תופיע במאגר המדבקות שלך.",
+      ];
+    }
+    if (kind === "downloaded") {
+      if (platform === "desktop") {
+        // We don't know which mobile OS the user will end up on, so the
+        // last step covers both add-to-stickers vocabularies.
+        return [
+          "הקובץ נשמר בתיקיית ההורדות.",
+          "תעביר אותו למובייל (WhatsApp Web / Drive / מייל לעצמך).",
+          "במובייל: שלח את הקובץ לחבר או לעצמך בוואטסאפ.",
+          "לחץ לחיצה ארוכה על המדבקה ב-WhatsApp.",
+          "בחר 'הוסף למדבקות' (אנדרואיד) או 'הוסף למועדפות' (iPhone).",
+        ];
+      }
+      return [
+        "פתח WhatsApp → צ'אט → 📎 → גלריה.",
+        "בחר את הקובץ madbeka-sticker.webp ושלח.",
+        "לחץ לחיצה ארוכה על המדבקה ששלחת.",
+        platform === "ios"
+          ? "בחר 'הוסף למועדפות'."
+          : "בחר 'הוסף למדבקות'.",
+      ];
+    }
+    // kind === "shared"
+    return [
+      "פתח את הצ'אט שאליו שלחת את המדבקה.",
+      "לחץ לחיצה ארוכה על המדבקה שקיבלת.",
+      platform === "ios"
+        ? "בחר 'הוסף למועדפות' — היא תיכנס למאגר המדבקות שלך."
+        : "בחר 'הוסף למדבקות' — היא תיכנס למאגר המדבקות שלך.",
+    ];
+  })();
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 grid place-items-center p-4"
+      style={{
+        background: "rgba(15,14,12,0.55)",
+        backdropFilter: "blur(6px)",
+      }}
+      role="dialog"
+      aria-modal="true"
+      dir="rtl"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md p-6 sm:p-7"
+        style={{
+          background: "var(--cream)",
+          border: "3px solid var(--ink)",
+          borderRadius: 26,
+          boxShadow: "10px 11px 0 var(--ink)",
+        }}
+      >
+        {/* Yellow tape strip */}
+        <span
+          aria-hidden
+          className="absolute"
+          style={{
+            top: -14,
+            right: "20%",
+            width: 90,
+            height: 24,
+            transform: "rotate(-6deg)",
+            background: "rgba(255,235,120,0.9)",
+            border: "2px solid rgba(0,0,0,0.15)",
+          }}
+        />
+
+        <button
+          onClick={onClose}
+          aria-label="סגור"
+          className="press-active absolute grid h-9 w-9 place-items-center"
+          style={{
+            top: 14,
+            left: 14,
+            background: "#fff",
+            border: "2px solid var(--ink)",
+            borderRadius: 10,
+            boxShadow: "3px 4px 0 var(--ink)",
+          }}
+        >
+          <X size={16} />
+        </button>
+
+        <div
+          className="mb-1 text-right"
+          style={{
+            fontFamily: "'Karantina', 'Heebo', sans-serif",
+            fontWeight: 700,
+            fontSize: 38,
+            lineHeight: 1,
+            letterSpacing: "-0.02em",
+            color: "var(--ink)",
+          }}
+        >
+          {headline}
+        </div>
+        <div
+          className="mb-5 text-right text-[14px] font-bold"
+          style={{ color: "#5a4252", lineHeight: 1.5 }}
+        >
+          {subhead}
+        </div>
+
+        <ol className="space-y-2.5 text-right">
+          {steps.map((step, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span
+                className="grid flex-none place-items-center text-[12px] font-extrabold"
+                style={{
+                  width: 26,
+                  height: 26,
+                  background: "var(--wa)",
+                  color: "#fff",
+                  border: "2px solid var(--ink)",
+                  borderRadius: 8,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  marginTop: 1,
+                }}
+              >
+                {i + 1}
+              </span>
+              <span
+                className="text-[14px] font-bold leading-snug"
+                style={{ color: "var(--ink)" }}
+              >
+                {step}
+              </span>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-6 flex flex-wrap gap-2.5">
+          {kind === "fallback" && (
+            <button
+              onClick={onDownload}
+              className="press-active inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 text-base font-extrabold"
+              style={{
+                background: "var(--wa)",
+                color: "#fff",
+                border: "2.5px solid var(--ink)",
+                borderRadius: 14,
+                boxShadow: "5px 6px 0 var(--ink)",
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontSize: 22,
+                minWidth: 140,
+              }}
+            >
+              <Download size={16} />
+              תורד עכשיו
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="press-active inline-flex flex-1 items-center justify-center px-5 py-3 text-sm font-extrabold"
+            style={{
+              background: "#fff",
+              color: "var(--ink)",
+              border: "2.5px solid var(--ink)",
+              borderRadius: 14,
+              boxShadow: "4px 5px 0 var(--ink)",
+              minWidth: 120,
+            }}
+          >
+            הבנתי
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PlayfulBtn({
   children,
