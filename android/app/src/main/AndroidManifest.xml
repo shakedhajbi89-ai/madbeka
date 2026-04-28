@@ -33,9 +33,31 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- WhatsApp Sticker Pack ContentProvider. Must be exported=true
+             so WhatsApp (a different process) can read it. The
+             readPermission gates access — only apps holding
+             com.whatsapp.sticker.READ can query, which limits exposure
+             to WhatsApp + WhatsApp Business. -->
+        <provider
+            android:name=".MadbekaStickerContentProvider"
+            android:authorities="il.co.madbekaapp.stickercontentprovider"
+            android:enabled="true"
+            android:exported="true"
+            android:readPermission="com.whatsapp.sticker.READ" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- WhatsApp visibility — required on Android 11+ so we can
+         resolve com.whatsapp.intent.action.ENABLE_STICKER_PACK -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <intent>
+            <action android:name="com.whatsapp.intent.action.ENABLE_STICKER_PACK" />
+        </intent>
+    </queries>
 </manifest>
