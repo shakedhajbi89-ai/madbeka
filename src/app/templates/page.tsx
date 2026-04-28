@@ -52,6 +52,11 @@ import {
 } from "@/lib/text-sticker";
 import { downloadBlob, shareStickerToWhatsApp } from "@/lib/sticker-utils";
 import { saveToGallery } from "@/lib/sticker-gallery";
+import { isNativeAndroid, addPackToWhatsApp } from "@/lib/native";
+import {
+  buildPackFromGallery,
+  stickersNeededForPack,
+} from "@/lib/whatsapp-pack";
 
 interface UserStatus {
   hasPaid: boolean;
@@ -183,8 +188,18 @@ export default function TemplatesPage() {
     | { kind: "shared" }
     | { kind: "fallback" }
     | { kind: "downloaded" }
+    | { kind: "added-to-pack" }
+    | { kind: "needs-more"; missing: number }
     | null
   >(null);
+
+  // Native (Capacitor / Android) feature gate. Detected on mount so SSR
+  // produces the same HTML as the first client render — Capacitor
+  // injects its globals before our React bundle hydrates.
+  const [isNative, setIsNative] = useState(false);
+  useEffect(() => {
+    setIsNative(isNativeAndroid());
+  }, []);
 
   const previewRef = useRef<HTMLCanvasElement | null>(null);
   const zoomRef = useRef<HTMLCanvasElement | null>(null);
@@ -584,6 +599,59 @@ export default function TemplatesPage() {
     }
   }, [isSignedIn, renderCurrent, primaryLabel]);
 
+  /**
+   * Native-only: bundle the user's gallery into a WhatsApp sticker pack
+   * and ask WhatsApp to add it. Hidden behind {@link isNative} — on the
+   * web this code path is unreachable and the JS tree-shakes cleanly.
+   *
+   * The current sticker (whatever's on the canvas) is saved to gallery
+   * first so it ends up in the pack we're about to ship.
+   */
+  const onAddToWhatsAppPack = useCallback(async () => {
+    setWorking("share");
+    setNotice("");
+    try {
+      // Make sure the in-progress sticker is actually in the gallery
+      // before we count — otherwise users hit "needs more" right after
+      // creating their third one.
+      const blob = await renderCurrent();
+      await saveToGallery(blob, primaryLabel);
+
+      const missing = await stickersNeededForPack();
+      if (missing > 0) {
+        setPostActionModal({ kind: "needs-more", missing });
+        return;
+      }
+
+      const pack = await buildPackFromGallery({
+        // One pack per device for now. The id has to be stable across
+        // re-adds so WhatsApp updates the existing pack rather than
+        // creating duplicates.
+        packId: "madbeka-default",
+        packName: "המדבקות שלי",
+      });
+      if (!pack) {
+        setPostActionModal({ kind: "needs-more", missing: 1 });
+        return;
+      }
+
+      const result = await addPackToWhatsApp(pack);
+      if (result.status === "added") {
+        setPostActionModal({ kind: "added-to-pack" });
+      } else if (result.status === "cancelled") {
+        // user dismissed WhatsApp's confirmation dialog — stay quiet.
+      } else {
+        console.error("[whatsapp-pack] add failed:", result.message);
+        setNotice(result.message || "ההוספה ל-WhatsApp נכשלה. נסה שוב.");
+      }
+    } catch (err) {
+      console.error("[whatsapp-pack] failed:", err);
+      setNotice("ההוספה ל-WhatsApp נכשלה. נסה שוב.");
+    } finally {
+      setWorking(null);
+    }
+  }, [renderCurrent, primaryLabel]);
+
   const onShare = useCallback(async () => {
     setWorking("share");
     setNotice("");
@@ -801,14 +869,30 @@ export default function TemplatesPage() {
                 </PlayfulBtn>
               </SignUpButton>
             )}
-            <PlayfulBtn
-              onClick={onShare}
-              disabled={working !== null}
-              kind="primary"
-              icon={<Send size={15} />}
-            >
-              {working === "share" ? "מכין..." : "שלח לוואטסאפ"}
-            </PlayfulBtn>
+            {/* On Android (Capacitor shell): primary CTA is "Add to
+                WhatsApp" — fires the Sticker Pack Intent so the pack
+                lands in the user's library in one tap. On the web we
+                fall back to plain Web Share (image attachment + manual
+                long-press flow). */}
+            {isNative ? (
+              <PlayfulBtn
+                onClick={onAddToWhatsAppPack}
+                disabled={working !== null}
+                kind="primary"
+                icon={<StickerIcon size={15} />}
+              >
+                {working === "share" ? "מוסיף..." : "הוסף למדבקות"}
+              </PlayfulBtn>
+            ) : (
+              <PlayfulBtn
+                onClick={onShare}
+                disabled={working !== null}
+                kind="primary"
+                icon={<Send size={15} />}
+              >
+                {working === "share" ? "מכין..." : "שלח לוואטסאפ"}
+              </PlayfulBtn>
+            )}
             {isLoaded && isSignedIn && (
               <div className="ms-1">
                 <UserButton />
@@ -1588,6 +1672,11 @@ export default function TemplatesPage() {
         {postActionModal && (
           <PostActionModal
             kind={postActionModal.kind}
+            missing={
+              postActionModal.kind === "needs-more"
+                ? postActionModal.missing
+                : undefined
+            }
             onClose={() => setPostActionModal(null)}
             onDownload={() => {
               setPostActionModal(null);
@@ -1636,10 +1725,13 @@ function detectPlatform(): Platform {
 
 function PostActionModal({
   kind,
+  missing,
   onClose,
   onDownload,
 }: {
-  kind: "shared" | "fallback" | "downloaded";
+  kind: "shared" | "fallback" | "downloaded" | "added-to-pack" | "needs-more";
+  /** For kind === "needs-more" only — how many stickers the user is short. */
+  missing?: number;
   onClose: () => void;
   onDownload: () => void;
 }) {
@@ -1648,20 +1740,39 @@ function PostActionModal({
     setPlatform(detectPlatform());
   }, []);
 
-  const headline =
-    kind === "shared"
-      ? "המדבקה נשלחה!"
-      : kind === "fallback"
-        ? "שולחים מהדסקטופ?"
-        : "המדבקה נשמרה במכשיר!";
+  const headline = (() => {
+    switch (kind) {
+      case "shared":
+        return "המדבקה נשלחה!";
+      case "fallback":
+        return "שולחים מהדסקטופ?";
+      case "downloaded":
+        return "המדבקה נשמרה במכשיר!";
+      case "added-to-pack":
+        return "המדבקה במאגר!";
+      case "needs-more":
+        return "כמעט שם!";
+    }
+  })();
 
-  const subhead =
-    kind === "fallback"
-      ? "ל-WhatsApp Web אין אפשרות לשלוח מדבקות ישירות. שני פתרונות:"
-      : "כדי שתופיע כמדבקה (ולא כתמונה רגילה) ב-WhatsApp:";
+  const subhead = (() => {
+    switch (kind) {
+      case "fallback":
+        return "ל-WhatsApp Web אין אפשרות לשלוח מדבקות ישירות. שני פתרונות:";
+      case "added-to-pack":
+        return "החבילה 'המדבקות שלי' נוספה ל-WhatsApp — תיכנס לכל צ'אט, תלחץ על אייקון המדבקות, והיא שם.";
+      case "needs-more":
+        return `WhatsApp דורש לפחות 3 מדבקות בכל חבילה. תיצור עוד ${missing} ואז תוכל להוסיף הכל בלחיצה אחת.`;
+      default:
+        return "כדי שתופיע כמדבקה (ולא כתמונה רגילה) ב-WhatsApp:";
+    }
+  })();
 
   // Steps depend on both kind + platform.
   const steps: string[] = (() => {
+    // Native happy paths — no instructions needed, the deed is done /
+    // the user just needs to keep creating.
+    if (kind === "added-to-pack" || kind === "needs-more") return [];
     if (kind === "fallback") {
       return [
         "תוריד את הקובץ ('הורד' למעלה) ושלח אותו לעצמך בוואטסאפ.",
