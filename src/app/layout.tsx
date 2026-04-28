@@ -14,6 +14,7 @@ import {
   Bellefair,
   Caveat,
   Rubik_Wet_Paint,
+  JetBrains_Mono,
 } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { heIL } from "@clerk/localizations";
@@ -137,6 +138,16 @@ const rubikWetPaint = Rubik_Wet_Paint({
   display: "swap",
 });
 
+// JetBrains Mono — used for timestamps, kickers, badges, and code-style
+// metadata throughout the Playful Sticker Shop UI. Latin only (Hebrew is
+// not its lane; we use Assistant for body copy in Hebrew).
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
 const SITE_TITLE = "Madbeka — מדבקות וואטסאפ בעברית";
 const SITE_DESCRIPTION =
   "עורך מדבקות וואטסאפ הישראלי הכי מהיר. כתוב בעברית, הוסף אימוג'ים, גרור כל אחד לבד, שלח לוואטסאפ — בלי אפליקציה, בלי הרשמה.";
@@ -213,6 +224,7 @@ export default function RootLayout({
           bellefair.variable,
           caveat.variable,
           rubikWetPaint.variable,
+          jetbrainsMono.variable,
         )}
       >
         <head>

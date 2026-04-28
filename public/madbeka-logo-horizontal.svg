@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" width="720" height="200" role="img" aria-label="Madbeka">
+  <!-- Horizontal lockup: the icon mark on the right (RTL leading position),
+       the Hebrew wordmark + tagline left of it. Use this in nav bars and
+       any context where the square logo would be too tall. -->
+  <g transform="translate(580 100) rotate(-6) translate(-72 -72)">
+    <!-- WhatsApp-green offset block behind the ink tile -->
+    <rect x="10" y="14" width="144" height="144" rx="28" fill="#25D366"/>
+    <!-- Ink tile -->
+    <rect x="0" y="0" width="144" height="144" rx="28" fill="#0F0E0C"/>
+    <!-- Hebrew letter מ centered in the tile -->
+    <text x="72" y="106"
+          text-anchor="middle"
+          font-family="'Karantina', 'Heebo', 'Arial Hebrew', 'Tahoma', sans-serif"
+          font-weight="700"
+          font-size="92"
+          fill="#FFF8EC"
+          letter-spacing="-0.01em">מ</text>
+  </g>
+  <!-- Wordmark + tagline -->
+  <text x="540" y="118"
+        text-anchor="end"
+        font-family="'Karantina', 'Heebo', 'Arial Hebrew', 'Tahoma', sans-serif"
+        font-weight="700"
+        font-size="78"
+        fill="#0F0E0C"
+        letter-spacing="-0.02em">מדבקה</text>
+  <text x="540" y="148"
+        text-anchor="end"
+        font-family="'Assistant', 'Heebo', 'Arial Hebrew', sans-serif"
+        font-weight="600"
+        font-size="18"
+        fill="#0F0E0C"
+        opacity="0.65">עורך מדבקות וואטסאפ</text>
+</svg>
