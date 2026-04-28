@@ -5,40 +5,39 @@ import { BRAND_NAME } from "@/lib/brand";
 
 /**
  * Satori (the engine behind next/og ImageResponse) doesn't run a real
- * bidi algorithm, so `direction: rtl` in CSS doesn't actually flip the
- * glyph order for Hebrew — each code point is placed left-to-right in
- * insertion order. For a Hebrew reader that looks mirrored. The reliable
- * workaround is to reverse the string in memory before rendering: when
- * Satori then lays the reversed code points out LTR, a Hebrew reader
- * scanning RTL sees the original forward-reading text.
- *
- * Works for plain Hebrew without nikud / complex combining marks, which
- * is what we have here.
+ * bidi algorithm, so `direction: rtl` doesn't actually flip glyph order
+ * for Hebrew. Reverse strings in memory before rendering — Satori then
+ * lays the reversed code points out LTR and a Hebrew reader scanning
+ * RTL sees the original forward-reading text.
  */
 function rtl(s: string): string {
   return Array.from(s).reverse().join("");
 }
 
 /**
- * Open Graph image served at /opengraph-image. Next.js App Router picks
- * this file up automatically and injects `<meta property="og:image">`
- * into every page. That's the image LinkedIn / WhatsApp / Twitter (X) /
- * Facebook / Slack / Telegram preview when someone shares madbekaapp.co.il.
+ * Open Graph image — 1200×630, served at /opengraph-image. Next.js
+ * auto-wires this into <meta property="og:image"> on every page.
  *
- * We render it on-demand with the same Hebrew font the product uses
- * (Heebo 900) so the brand voice is consistent. Satori is the rendering
- * engine — it only speaks JSX + a limited CSS subset. Layout built here
- * favors big impact over fine-detail polish.
+ * Visual style: Playful Sticker Shop. Cream background with pastel
+ * radial corners + sticker mocks scattered around the headline.
  */
 
 export const alt = "Madbeka — עורך מדבקות וואטסאפ בעברית";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+const INK = "#0F0E0C";
+const CREAM = "#FFF8EC";
+const WA = "#25D366";
+const WA_STROKE_DARK = "#06352b";
+const PINK = "#FF6EB5";
+const PINK_STROKE = "#5b1b73";
+const YELLOW = "#F4C430";
+const PURPLE = "#7C3AED";
+const PURPLE_STROKE = "#1a063b";
+
 export default async function Image() {
-  // Load Hebrew-capable Heebo weights from the installed @fontsource
-  // package. Reading from node_modules at request time keeps us off any
-  // external CDN so the OG image works even if CDN DNS blips.
+  // Heebo from @fontsource — works for Hebrew. Both 700 and 900 weights.
   const heeboBold = fs.readFileSync(
     path.join(
       process.cwd(),
@@ -62,90 +61,201 @@ export default async function Image() {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          background:
-            "linear-gradient(135deg, #25D366 0%, #128C7E 55%, #0F766E 100%)",
+          backgroundColor: CREAM,
+          backgroundImage: `radial-gradient(circle at 20% 25%, rgba(37,211,102,0.25), transparent 60%), radial-gradient(circle at 80% 75%, rgba(255,110,181,0.18), transparent 60%)`,
           fontFamily: "Heebo",
-          color: "white",
+          color: INK,
           padding: 60,
           position: "relative",
         }}
       >
-        {/* Faint background checker to hint at the "transparent sticker" vibe */}
+        {/* Floating sample stickers — split into individual elements so
+            we can position each absolutely without dynamic mapping that
+            Satori sometimes chokes on. Each is a card with the sticker
+            text inside. */}
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            backgroundImage:
-              "radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.08) 0%, transparent 40%)",
+            top: 70,
+            right: 80,
+            transform: "rotate(-8deg)",
+            backgroundColor: "#fff",
+            border: `3px solid ${INK}`,
+            borderRadius: 22,
+            padding: "12px 22px",
+            boxShadow: `7px 9px 0 ${INK}`,
             display: "flex",
+            fontSize: 78,
+            fontWeight: 900,
+            color: WA,
+            lineHeight: 1,
           }}
-        />
+        >
+          {rtl("יאללה")}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            top: 380,
+            right: 110,
+            transform: "rotate(6deg)",
+            backgroundColor: "#fff",
+            border: `3px solid ${INK}`,
+            borderRadius: 22,
+            padding: "12px 22px",
+            boxShadow: `7px 9px 0 ${INK}`,
+            display: "flex",
+            fontSize: 64,
+            fontWeight: 900,
+            color: YELLOW,
+            lineHeight: 1,
+          }}
+        >
+          {rtl("סבבה")}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            top: 70,
+            left: 90,
+            transform: "rotate(-4deg)",
+            backgroundColor: "#fff",
+            border: `3px solid ${INK}`,
+            borderRadius: 22,
+            padding: "12px 22px",
+            boxShadow: `7px 9px 0 ${INK}`,
+            display: "flex",
+            fontSize: 72,
+            fontWeight: 900,
+            color: PINK,
+            lineHeight: 1,
+          }}
+        >
+          {rtl("חחחח")}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            top: 410,
+            left: 140,
+            transform: "rotate(10deg)",
+            backgroundColor: "#fff",
+            border: `3px solid ${INK}`,
+            borderRadius: 22,
+            padding: "12px 22px",
+            boxShadow: `7px 9px 0 ${INK}`,
+            display: "flex",
+            fontSize: 58,
+            fontWeight: 900,
+            color: PURPLE,
+            lineHeight: 1,
+          }}
+        >
+          {rtl("אחי")}
+        </div>
 
-        {/* Sticker mock — word + emoji side by side, white card, shadow */}
+        {/* Centered logo + headline + URL */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 36,
-            background: "white",
-            padding: "44px 72px",
-            borderRadius: 36,
-            boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-            marginBottom: 44,
-            transform: "rotate(-3deg)",
+            gap: 14,
+            marginBottom: 24,
           }}
         >
           <div
             style={{
-              fontSize: 130,
+              width: 60,
+              height: 60,
+              background: INK,
+              color: CREAM,
+              borderRadius: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 42,
               fontWeight: 900,
-              letterSpacing: -2,
-              color: "#0F172A",
+              transform: "rotate(-4deg)",
+              boxShadow: `4px 5px 0 ${WA}`,
             }}
           >
-            {rtl("יאללה")}
+            {rtl("מ")}
           </div>
-          <div style={{ fontSize: 110, lineHeight: 1 }}>🔥</div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 38,
+              fontWeight: 900,
+              letterSpacing: -1,
+              color: INK,
+            }}
+          >
+            {BRAND_NAME}
+          </div>
         </div>
 
-        {/* Wordmark */}
+        {/* Big headline — single line on this canvas; the WA-green
+            "בעברית" is its own div so we can color it independently. */}
         <div
           style={{
-            fontSize: 104,
+            fontSize: 92,
             fontWeight: 900,
-            letterSpacing: -4,
-            marginTop: 8,
-            lineHeight: 1,
-          }}
-        >
-          {BRAND_NAME}
-        </div>
-
-        {/* Hebrew tagline — pre-reversed so Satori's LTR layout renders
-            correctly when read RTL by a Hebrew speaker. Generous margin
-            above so it doesn't crowd the wordmark. */}
-        <div
-          style={{
-            fontSize: 40,
-            fontWeight: 700,
-            marginTop: 42,
+            lineHeight: 0.95,
+            letterSpacing: -3,
+            color: INK,
             textAlign: "center",
-            maxWidth: 1000,
-            lineHeight: 1.25,
+            maxWidth: 1080,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "baseline",
           }}
         >
-          {rtl("מדבקות וואטסאפ בעברית — צור, גרור, שתף")}
+          <div style={{ display: "flex" }}>{rtl("מדבקות ואטסאפ ")}</div>
+          <div style={{ display: "flex", color: WA, marginRight: 14 }}>
+            {rtl("בעברית")}
+          </div>
         </div>
-
-        {/* URL — all lowercase + weight 900 so every character carries
-            the same visual weight (no random capital-A standout). */}
         <div
           style={{
-            fontSize: 30,
+            display: "flex",
+            fontSize: 56,
             fontWeight: 900,
+            lineHeight: 1,
+            letterSpacing: -2,
+            color: INK,
+            marginTop: 16,
+          }}
+        >
+          {rtl("בכמה שניות")}
+        </div>
+
+        {/* Subtitle */}
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            marginTop: 28,
+            color: INK,
+            opacity: 0.7,
+            display: "flex",
+          }}
+        >
+          {rtl("הקלד · עצב · שלח · ₪29 לכל החיים")}
+        </div>
+
+        {/* URL pill */}
+        <div
+          style={{
+            display: "flex",
             marginTop: 26,
-            opacity: 0.95,
+            background: INK,
+            color: CREAM,
+            padding: "10px 22px",
+            borderRadius: 100,
+            fontSize: 18,
+            fontWeight: 700,
             letterSpacing: 1,
+            boxShadow: `4px 5px 0 ${WA}`,
           }}
         >
           madbekaapp.co.il
