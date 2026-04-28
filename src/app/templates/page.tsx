@@ -983,10 +983,17 @@ export default function TemplatesPage() {
                   · הקלק להעתקה לקנבס
                 </span>
               </div>
-              <div
-                className="no-scrollbar flex gap-3 overflow-x-auto pb-1.5 pt-1"
-              >
-                {TEMPLATES.map((t, i) => {
+              {/* Horizontal rail. Wrapping in a relative container with a
+                  fade gradient on the trailing edge gives users a visual
+                  hint that there's more content. We also keep a thin native
+                  scrollbar — invisible scrollbars made the rail look like a
+                  cropped row instead of a scrollable carousel. */}
+              <div className="relative">
+                <div
+                  className="templates-rail flex gap-3 overflow-x-auto pb-3 pt-1"
+                  style={{ scrollbarColor: "var(--ink) transparent" }}
+                >
+                  {TEMPLATES.map((t, i) => {
                   const tilt = ((i % 3) - 1) * 2.5;
                   return (
                     <button
@@ -1017,6 +1024,20 @@ export default function TemplatesPage() {
                     </button>
                   );
                 })}
+                </div>
+                {/* Fade gradient on the leading edge (LTR-right / RTL-left
+                    after dir=rtl flip) — subtle visual cue that the rail
+                    extends past the visible area. pointer-events-none keeps
+                    cards under it clickable. */}
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute bottom-0 top-0 w-12"
+                  style={{
+                    insetInlineStart: 0,
+                    background:
+                      "linear-gradient(to left, transparent, var(--cream) 80%)",
+                  }}
+                />
               </div>
             </div>
 

@@ -190,6 +190,23 @@ body {
   display: none;
 }
 
+/* Templates rail — visible thin scrollbar so users see they can scroll
+   horizontally through preset words. Hidden scrollbars made the rail
+   look like a cropped row instead of a carousel. */
+.templates-rail {
+  scrollbar-width: thin;
+}
+.templates-rail::-webkit-scrollbar {
+  height: 6px;
+}
+.templates-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.templates-rail::-webkit-scrollbar-thumb {
+  background: var(--ink);
+  border-radius: 999px;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

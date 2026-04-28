@@ -30,18 +30,25 @@ const clerkFrameSrc = [
   "https://*.lclerk.com",
 ].join(" ");
 
+// @imgly/background-removal downloads its ONNX model + WASM runtime from
+// this CDN at first invocation. Without it, connect-src blocks the fetch
+// and bg removal silently fails ("לא הצלחנו להסיר את הרקע").
+const imglyConnect = "https://staticimgly.com";
+
 const csp = [
   "default-src 'self'",
-  // Scripts: self + Clerk + Google Analytics/Tag Manager
-  `script-src 'self' 'unsafe-inline' ${clerkScriptSrc} https://www.googletagmanager.com`,
+  // Scripts: self + Clerk + Google Analytics/Tag Manager.
+  // 'wasm-unsafe-eval' lets @imgly instantiate the bg-removal WASM module
+  // without falling back to the legacy 'unsafe-eval' grant.
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${clerkScriptSrc} https://www.googletagmanager.com`,
   // Styles: self + inline (Tailwind/shadcn) + Google Fonts
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   // Fonts: self + Google Fonts CDN
   "font-src 'self' data: https://fonts.gstatic.com",
   // Images: self + data URIs + blob (canvas export) + GA pixel
   "img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com",
-  // Connect: self + Clerk API + GA/GTM
-  `connect-src 'self' ${clerkConnectSrc} https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com`,
+  // Connect: self + Clerk API + GA/GTM + imgly model CDN
+  `connect-src 'self' ${clerkConnectSrc} ${imglyConnect} https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com`,
   // Frames: Clerk auth iframes only (no clickjacking)
   `frame-src ${clerkFrameSrc}`,
   // No embedding this site in iframes (clickjacking protection)
