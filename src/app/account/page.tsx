@@ -2,21 +2,27 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq, desc } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
-import { UserButton } from "@clerk/nextjs";
+import {
+  Download,
+  ImageIcon,
+  LogOut,
+  Mail,
+  Share2,
+  ShieldCheck,
+  Sticker as StickerIcon,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
 import { db, users, stickerEvents } from "@/lib/db";
 import { ensureCurrentUser } from "@/lib/user-service";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { TopBar } from "@/components/playful/TopBar";
 import { PUBLIC_DOMAIN } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
 const FREE_TIER_LIMIT = 3;
-const REFUND_DOWNLOAD_LIMIT = 5; // per refund policy: eligible if <5 downloads post-payment
+const REFUND_DOWNLOAD_LIMIT = 5;
 
-/**
- * Formats a Date into a dd/MM/yyyy string in Hebrew locale.
- * Falls back gracefully if the input is null.
- */
 function formatDate(d: Date | null | undefined): string {
   if (!d) return "—";
   return new Intl.DateTimeFormat("he-IL", {
@@ -37,10 +43,7 @@ export default async function AccountPage() {
     redirect("/");
   }
 
-  // Upsert user row + pull latest state from DB
   const userRow = await ensureCurrentUser();
-
-  // Pull recent events for usage summary
   const events = await db
     .select()
     .from(stickerEvents)
@@ -52,7 +55,6 @@ export default async function AccountPage() {
   const isRefunded = userRow.refunded;
   const freeRemaining = Math.max(0, FREE_TIER_LIMIT - totalStickers);
 
-  // Refund eligibility: paid, not refunded, <5 downloads after paidAt, within 14 days
   const paidEvents = userRow.paidAt
     ? events.filter((e) => e.createdAt >= userRow.paidAt!).length
     : 0;
@@ -62,255 +64,464 @@ export default async function AccountPage() {
   const canRefund =
     hasPaid && withinRefundWindow && paidEvents < REFUND_DOWNLOAD_LIMIT;
 
+  const refundDeadline = userRow.paidAt
+    ? new Date(userRow.paidAt.getTime() + 14 * 24 * 60 * 60 * 1000)
+    : null;
+  const refundDaysLeft = refundDeadline
+    ? Math.max(0, Math.ceil((refundDeadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : 0;
+
+  const recentEvents = events.slice(0, 5);
+
   return (
-    <main className="relative flex min-h-screen flex-col items-center overflow-hidden bg-gradient-to-b from-white to-gray-50 px-6 py-6 dark:from-gray-950 dark:to-gray-900">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[400px] bg-gradient-to-b from-[color:var(--brand-green)]/5 via-transparent to-transparent dark:from-[color:var(--brand-green)]/10"
-      />
+    <main
+      dir="rtl"
+      className="relative min-h-screen text-ink"
+      style={{
+        background: "var(--cream)",
+        backgroundImage: `
+          radial-gradient(circle at 20% 18%, rgba(37,211,102,0.18), transparent 60%),
+          radial-gradient(circle at 88% 82%, rgba(255,110,181,0.12), transparent 65%)
+        `,
+        fontFamily: "'Assistant', system-ui, sans-serif",
+      }}
+    >
+      <div className="relative z-10 mx-auto max-w-5xl px-6 py-6 lg:px-8">
+        <TopBar active="account" />
 
-      <div className="relative w-full max-w-2xl space-y-8">
-        {/* Header */}
-        <header className="flex items-center justify-between">
+        {/* Greeting */}
+        <div className="mb-7 flex flex-col-reverse items-start justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <div
+              className="mb-1 text-xs font-bold uppercase tracking-wider"
+              style={{ fontFamily: "'JetBrains Mono', monospace", opacity: 0.55 }}
+            >
+              חשבון
+            </div>
+            <h1
+              style={{
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontWeight: 700,
+                fontSize: 56,
+                lineHeight: 0.95,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              שלום
+            </h1>
+            <p className="mt-1 text-[15px] font-bold" style={{ opacity: 0.65 }}>
+              {userRow.email} · חבר מאז {formatDate(userRow.createdAt)}
+            </p>
+          </div>
           <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-xl border-2 border-white bg-black px-3 py-1.5 text-xl font-black text-white shadow-lg shadow-black/10 transition-transform hover:scale-[1.02] dark:border-gray-700 dark:bg-gray-100 dark:text-black"
+            href="/api/auth/sign-out"
+            className="press-active inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold"
+            style={{
+              background: "transparent",
+              color: "var(--ink)",
+              border: "2px solid var(--ink)",
+              borderRadius: 12,
+            }}
           >
-            Madbeka
+            <LogOut size={14} />
+            התנתק
           </Link>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <UserButton />
-          </div>
-        </header>
-
-        <div className="space-y-2 text-right">
-          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
-            החשבון שלי
-          </div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-gray-50">
-            {userRow.email}
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            חבר מאז {formatDate(userRow.createdAt)}
-          </p>
         </div>
 
-        {/* Status card */}
-        <section className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white p-6 shadow-xl shadow-black/5 dark:border-gray-800 dark:bg-gray-900 dark:shadow-black/30">
-          {hasPaid && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[color:var(--brand-green)]/20 blur-3xl"
-            />
-          )}
-          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-2 text-right">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                מצב חשבון
-              </div>
-              {hasPaid ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-green)]/15 px-2.5 py-0.5 text-xs font-bold text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
-                      ✓ פעיל
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-gray-50">
-                    גרסה מלאה
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    מדבקות ללא הגבלה, בלי סימן מים
-                  </div>
-                </>
-              ) : isRefunded ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      הוחזר
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-gray-50">
-                    חזרה לתוכנית חינם
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                      חינם
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900 dark:text-gray-50">
-                    תוכנית חינם
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    נותרו לך {freeRemaining} מדבקות חינמיות
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-col items-stretch gap-2 sm:items-end">
-              {!hasPaid && (
-                <Link
-                  href="/?upgrade=1"
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[color:var(--brand-green)] to-[color:var(--brand-green-dark)] px-5 text-sm font-semibold text-white shadow-lg shadow-[color:var(--brand-green)]/30 transition-all hover:shadow-xl hover:shadow-[color:var(--brand-green)]/40"
-                >
-                  שדרג ל-₪29
-                </Link>
-              )}
-              <Link
-                href="/gallery"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        {/* Top row — status card + stat tile */}
+        <div className="mb-5 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+          {/* Status card */}
+          <div
+            className="relative overflow-hidden p-7"
+            style={{
+              background: hasPaid ? "var(--ink)" : "#fff",
+              color: hasPaid ? "var(--cream)" : "var(--ink)",
+              border: "2.5px solid var(--ink)",
+              borderRadius: 22,
+              boxShadow: "8px 9px 0 var(--ink)",
+            }}
+          >
+            {hasPaid && (
+              <div
+                aria-hidden
+                className="absolute"
+                style={{
+                  top: -9,
+                  right: "22%",
+                  width: 94,
+                  height: 28,
+                  transform: "rotate(-7deg)",
+                  background: "rgba(255,235,120,0.85)",
+                  border: "2px solid rgba(0,0,0,0.15)",
+                }}
+              />
+            )}
+            <div className="flex items-center gap-2.5 mb-3.5">
+              <div
+                className="px-2.5 py-1"
+                style={{
+                  background: hasPaid ? "var(--wa)" : "rgba(15,14,12,0.08)",
+                  color: hasPaid ? "#fff" : "var(--ink)",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 100,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  border: `1.5px solid ${hasPaid ? "var(--cream)" : "var(--ink)"}`,
+                }}
               >
-                הגלריה שלי
+                {hasPaid ? "✓ Paid" : isRefunded ? "Refunded" : "Free"}
+              </div>
+              <div className="text-[13px] opacity-70">
+                {hasPaid
+                  ? "מנוי לכל החיים"
+                  : isRefunded
+                    ? "המנוי הוחזר"
+                    : `${freeRemaining} חינמיות נשארו`}
+              </div>
+            </div>
+            <div
+              style={{
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontWeight: 700,
+                fontSize: 44,
+                lineHeight: 1,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {hasPaid ? "גישה מלאה" : "התוכנית החינמית"}
+            </div>
+            <div
+              className="mt-2 mb-5 text-[14px]"
+              style={{ opacity: 0.75 }}
+            >
+              {hasPaid
+                ? "כל הפונטים, הסגנונות, והסרת רקע — ללא הגבלה."
+                : `אחרי ${FREE_TIER_LIMIT} מדבקות תצטרך לשדרג כדי להמשיך.`}
+            </div>
+
+            {!hasPaid && !isRefunded && (
+              <Link
+                href="/?upgrade=1"
+                className="press-active inline-flex items-center gap-2 px-5 py-3 text-base font-extrabold"
+                style={{
+                  background: "var(--wa)",
+                  color: "#fff",
+                  border: "2.5px solid var(--ink)",
+                  borderRadius: 14,
+                  boxShadow: "4px 5px 0 var(--ink)",
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontSize: 22,
+                }}
+              >
+                <Zap size={18} />
+                שדרג ב-₪29 — חד פעמי
               </Link>
-            </div>
-          </div>
-        </section>
+            )}
 
-        {/* Stats grid */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 text-right shadow-sm dark:border-gray-800 dark:bg-gray-800/60">
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              מדבקות שיצרת
-            </div>
-            <div className="mt-1 text-2xl font-black text-gray-900 dark:text-gray-50">
-              {totalStickers}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 text-right shadow-sm dark:border-gray-800 dark:bg-gray-800/60">
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {hasPaid ? "מדבקות בתוכנית" : "חינם שנותרו"}
-            </div>
-            <div className="mt-1 text-2xl font-black text-gray-900 dark:text-gray-50">
-              {hasPaid ? "∞" : freeRemaining}
-            </div>
-          </div>
-          <div className="col-span-2 rounded-2xl border border-gray-200 bg-white p-4 text-right shadow-sm sm:col-span-1 dark:border-gray-800 dark:bg-gray-800/60">
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              מדבקה אחרונה
-            </div>
-            <div className="mt-1 text-sm font-bold text-gray-900 dark:text-gray-50">
-              {events[0]?.createdAt ? formatDate(events[0].createdAt) : "—"}
-            </div>
-          </div>
-        </section>
-
-        {/* Billing */}
-        {(hasPaid || isRefunded) && (
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <h2 className="mb-4 text-right text-lg font-bold text-gray-900 dark:text-gray-50">
-              חיוב
-            </h2>
-            <dl className="space-y-3 text-right text-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
-                <dd className="font-medium text-gray-900 dark:text-gray-100">
-                  {formatCurrency(userRow.paidAmountCents)}
-                </dd>
-                <dt className="text-gray-600 dark:text-gray-400">סכום</dt>
-              </div>
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
-                <dd className="font-medium text-gray-900 dark:text-gray-100">
-                  {formatDate(userRow.paidAt)}
-                </dd>
-                <dt className="text-gray-600 dark:text-gray-400">תאריך תשלום</dt>
-              </div>
-              <div className="flex items-center justify-between">
-                <dd className="font-mono text-xs text-gray-700 dark:text-gray-300">
-                  {userRow.paymentOrderId ?? "—"}
-                </dd>
-                <dt className="text-gray-600 dark:text-gray-400">מס׳ הזמנה</dt>
-              </div>
-              {isRefunded && userRow.refundedAt && (
-                <div className="flex items-center justify-between border-t border-gray-100 pt-3 dark:border-gray-800">
-                  <dd className="font-medium text-amber-700 dark:text-amber-400">
-                    {formatDate(userRow.refundedAt)}
-                  </dd>
-                  <dt className="text-gray-600 dark:text-gray-400">תאריך החזר</dt>
+            {hasPaid && (
+              <div
+                className="mt-4 flex flex-wrap gap-5 pt-4 text-[13px]"
+                style={{
+                  borderTop: "1.5px dashed rgba(255,248,236,0.25)",
+                  opacity: 0.85,
+                }}
+              >
+                <div>
+                  <div className="text-[11px] opacity-60">שולם</div>
+                  <div className="font-extrabold">
+                    {formatCurrency(userRow.paidAmountCents)}
+                  </div>
                 </div>
-              )}
-            </dl>
-
-            {canRefund && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-right text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
-                <div className="font-semibold text-amber-900 dark:text-amber-200">
-                  זכאי להחזר מלא
+                <div>
+                  <div className="text-[11px] opacity-60">תאריך</div>
+                  <div className="font-extrabold">
+                    {formatDate(userRow.paidAt)}
+                  </div>
                 </div>
-                <p className="mt-1 text-amber-800 dark:text-amber-300">
-                  עדיין בחלון 14 הימים ובגבול {REFUND_DOWNLOAD_LIMIT} הורדות. לבקשת החזר,{" "}
-                  <a
-                    href="mailto:support@madbekaapp.co.il"
-                    className="font-semibold underline"
+                <div>
+                  <div className="text-[11px] opacity-60">מס׳ הזמנה</div>
+                  <div
+                    className="font-extrabold"
+                    style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}
                   >
-                    שלח לנו מייל
-                  </a>
-                  .
-                </p>
+                    {userRow.paymentOrderId
+                      ? userRow.paymentOrderId.slice(0, 12) + "..."
+                      : "—"}
+                  </div>
+                </div>
               </div>
             )}
-          </section>
-        )}
+          </div>
 
-        {/* Recent activity */}
-        {events.length > 0 && (
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-            <div className="mb-4 flex items-center justify-between">
-              <Link
-                href="/gallery"
-                className="text-xs font-medium text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
+          {/* Stat tile */}
+          <div
+            className="relative flex flex-col justify-between p-7"
+            style={{
+              background: "var(--cream)",
+              border: "2.5px solid var(--ink)",
+              borderRadius: 22,
+              boxShadow: "8px 9px 0 var(--ink)",
+            }}
+          >
+            <div>
+              <div
+                className="mb-3.5 grid h-11 w-11 place-items-center"
+                style={{
+                  background: "var(--wa)",
+                  border: "2px solid var(--ink)",
+                  borderRadius: 12,
+                  boxShadow: "3px 4px 0 var(--ink)",
+                }}
               >
-                ראה הכל →
-              </Link>
-              <h2 className="text-right text-lg font-bold text-gray-900 dark:text-gray-50">
-                פעילות אחרונה
-              </h2>
+                <StickerIcon size={22} color="#fff" strokeWidth={2.4} />
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 80,
+                  lineHeight: 0.9,
+                  letterSpacing: "-0.03em",
+                }}
+              >
+                {totalStickers}
+              </div>
+              <div className="mt-1 text-[14px]" style={{ opacity: 0.7 }}>
+                מדבקות שיצרת בסך הכל
+              </div>
             </div>
-            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-              {events.slice(0, 5).map((event) => (
-                <li
-                  key={event.id}
-                  className="flex items-center justify-between py-3 text-sm"
-                >
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      event.wasPaidTier
-                        ? "bg-[color:var(--brand-green)]/15 text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]"
-                        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                    }`}
-                  >
-                    {event.wasPaidTier ? "משולם" : "חינם"}
-                  </span>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    מדבקה · {formatDate(event.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+            {totalStickers > 0 && (
+              <div
+                className="mt-3.5 inline-flex items-center gap-1.5 text-[12px] font-extrabold"
+                style={{ color: "var(--wa-dark)" }}
+              >
+                <TrendingUp size={13} />
+                {hasPaid ? "ללא הגבלה" : `${freeRemaining} בחינמיות`}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Refund banner */}
+        {canRefund && refundDeadline && (
+          <div
+            className="mb-6 flex items-center gap-3.5 px-5 py-3.5"
+            style={{
+              background: "var(--paper)",
+              border: "2px dashed var(--ink)",
+              borderRadius: 16,
+            }}
+          >
+            <ShieldCheck size={20} color="var(--wa-dark)" strokeWidth={2.4} />
+            <div className="flex-1">
+              <div className="text-[14px] font-extrabold">
+                זכאי להחזר עד {formatDate(refundDeadline)} ({refundDaysLeft} ימים נשארו)
+              </div>
+              <div className="mt-0.5 text-[12px]" style={{ opacity: 0.65 }}>
+                החזר מלא, ללא שאלות. נשלח חזרה לאמצעי התשלום המקורי תוך 5-7 ימי עסקים.
+              </div>
+            </div>
+            <a
+              href="mailto:support@madbekaapp.co.il?subject=Refund%20request"
+              className="press-active px-3.5 py-2 text-[13px] font-extrabold"
+              style={{
+                background: "transparent",
+                border: "1.5px solid var(--ink)",
+                borderRadius: 10,
+                opacity: 0.85,
+              }}
+            >
+              בקש החזר
+            </a>
+          </div>
         )}
 
-        {/* Help */}
-        <section className="rounded-3xl border border-gray-200 bg-gray-50 p-6 text-right text-sm dark:border-gray-800 dark:bg-gray-800/50">
-          <h2 className="mb-2 text-lg font-bold text-gray-900 dark:text-gray-50">
-            צריך עזרה?
+        {/* Downloads section */}
+        <div className="mb-5 flex items-center justify-between">
+          <h2
+            style={{
+              fontFamily: "'Karantina', 'Heebo', sans-serif",
+              fontWeight: 700,
+              fontSize: 36,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            היסטוריית הורדות
           </h2>
-          <p className="text-gray-700 dark:text-gray-300">
-            כל שאלה, בקשת החזר, או בעיה טכנית — פשוט שלח לנו מייל ל-{" "}
-            <a
-              href="mailto:support@madbekaapp.co.il"
-              className="font-semibold text-[color:var(--brand-green-dark)] underline dark:text-[color:var(--brand-green)]"
-            >
-              support@madbekaapp.co.il
-            </a>
-            . אנחנו עונים בדרך כלל באותו יום.
-          </p>
-        </section>
+          <Link
+            href="/gallery"
+            className="text-sm font-extrabold"
+            style={{ color: "var(--wa-dark)" }}
+          >
+            ראה הכל בגלריה →
+          </Link>
+        </div>
 
-        <footer className="pt-4 text-center text-xs text-gray-500 dark:text-gray-500">
-          {PUBLIC_DOMAIN}
-        </footer>
+        {recentEvents.length === 0 ? (
+          <div
+            className="p-12 text-center"
+            style={{
+              background: "#fff",
+              border: "2.5px dashed var(--ink)",
+              borderRadius: 18,
+            }}
+          >
+            <ImageIcon
+              size={36}
+              className="mx-auto mb-3"
+              style={{ opacity: 0.4 }}
+            />
+            <div className="text-base font-extrabold">עוד אין הורדות</div>
+            <p className="mt-1 text-sm" style={{ opacity: 0.65 }}>
+              צור מדבקה ראשונה ב-
+              <Link href="/templates" className="font-extrabold underline">
+                עורך
+              </Link>
+              .
+            </p>
+          </div>
+        ) : (
+          <div
+            className="overflow-hidden"
+            style={{
+              background: "#fff",
+              border: "2.5px solid var(--ink)",
+              borderRadius: 18,
+              boxShadow: "6px 7px 0 var(--ink)",
+            }}
+          >
+            {/* Header row */}
+            <div
+              className="hidden gap-4 px-5 py-3 text-[12px] font-extrabold sm:grid"
+              style={{
+                gridTemplateColumns: "60px 1fr 1.2fr 1fr 80px",
+                background: "var(--paper)",
+                borderBottom: "2px solid var(--ink)",
+                opacity: 0.75,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              <div></div>
+              <div>טקסט</div>
+              <div>תאריך</div>
+              <div>תוכנית</div>
+              <div></div>
+            </div>
+            {recentEvents.map((event, i) => (
+              <div
+                key={event.id}
+                className="grid items-center gap-4 px-5 py-3.5 sm:grid-cols-[60px_1fr_1.2fr_1fr_80px]"
+                style={{
+                  borderBottom:
+                    i < recentEvents.length - 1
+                      ? "1.5px dashed var(--ink)"
+                      : "none",
+                  fontSize: 14,
+                }}
+              >
+                <div
+                  className="grid h-11 w-11 place-items-center"
+                  style={{
+                    background: "var(--cream)",
+                    border: "1.5px solid var(--ink)",
+                    borderRadius: 10,
+                    fontFamily: "'Karantina', 'Heebo', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 16,
+                    color: "var(--wa-dark)",
+                    transform: "rotate(-3deg)",
+                  }}
+                >
+                  ✓
+                </div>
+                <div
+                  className="font-extrabold"
+                  style={{
+                    fontFamily: "'Karantina', 'Heebo', sans-serif",
+                    fontSize: 22,
+                  }}
+                >
+                  מדבקה
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 12,
+                    opacity: 0.7,
+                  }}
+                >
+                  {formatDate(event.createdAt)}
+                </div>
+                <div className="text-[13px]" style={{ opacity: 0.75 }}>
+                  {event.wasPaidTier ? "Paid" : "Free"}
+                </div>
+                <div className="hidden justify-end gap-1.5 sm:flex">
+                  <button
+                    title="הורד"
+                    className="grid h-8 w-8 place-items-center"
+                    style={{
+                      background: "transparent",
+                      border: "1.5px solid var(--ink)",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Download size={13} />
+                  </button>
+                  <button
+                    title="שתף"
+                    className="grid h-8 w-8 place-items-center"
+                    style={{
+                      background: "transparent",
+                      border: "1.5px solid var(--ink)",
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Share2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Help footer */}
+        <div
+          className="mt-10 flex flex-wrap items-center gap-5 pt-5 text-[13px]"
+          style={{
+            borderTop: "1.5px dashed var(--ink)",
+            opacity: 0.7,
+          }}
+        >
+          <a
+            href="mailto:support@madbekaapp.co.il"
+            className="inline-flex items-center gap-1.5"
+          >
+            <Mail size={14} />
+            support@madbekaapp.co.il
+          </a>
+          <Link href="/terms" className="inline-flex items-center gap-1.5">
+            תקנון
+          </Link>
+          <Link href="/privacy" className="inline-flex items-center gap-1.5">
+            פרטיות
+          </Link>
+          <Link href="/refund" className="inline-flex items-center gap-1.5">
+            החזרים
+          </Link>
+          <span
+            className="ms-auto"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              opacity: 0.6,
+            }}
+          >
+            v1.0.0 · {PUBLIC_DOMAIN}
+          </span>
+        </div>
       </div>
     </main>
   );

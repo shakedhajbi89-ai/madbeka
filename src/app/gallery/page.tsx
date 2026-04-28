@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
+import { Download, ImageIcon, Plus, Send, Trash2 } from "lucide-react";
 import {
   deleteFromGallery,
   listGallery,
@@ -12,8 +13,7 @@ import {
   downloadBlob,
   shareStickerToWhatsApp,
 } from "@/lib/sticker-utils";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { TopBar } from "@/components/playful/TopBar";
 import { PUBLIC_DOMAIN } from "@/lib/brand";
 
 interface GalleryItemUI extends GalleryEntry {
@@ -62,18 +62,15 @@ export default function GalleryPage() {
     };
   }, [load]);
 
-  const onDelete = useCallback(
-    async (id: string) => {
-      if (!confirm("למחוק את המדבקה הזאת מהגלריה?")) return;
-      await deleteFromGallery(id);
-      setItems((prev) => {
-        const item = prev?.find((p) => p.id === id);
-        if (item) URL.revokeObjectURL(item.url);
-        return prev?.filter((p) => p.id !== id) ?? [];
-      });
-    },
-    [],
-  );
+  const onDelete = useCallback(async (id: string) => {
+    if (!confirm("למחוק את המדבקה הזאת מהגלריה?")) return;
+    await deleteFromGallery(id);
+    setItems((prev) => {
+      const item = prev?.find((p) => p.id === id);
+      if (item) URL.revokeObjectURL(item.url);
+      return prev?.filter((p) => p.id !== id) ?? [];
+    });
+  }, []);
 
   const onDownload = useCallback((item: GalleryItemUI) => {
     downloadBlob(item.blob, `madbeka-sticker-${item.id.slice(0, 8)}.webp`);
@@ -85,7 +82,9 @@ export default function GalleryPage() {
     try {
       const result = await shareStickerToWhatsApp(item.blob);
       if (result === "fallback") {
-        setShareNotice("פתחנו לך וואטסאפ. הורד קודם את המדבקה ואז שלח מהנייד.");
+        setShareNotice(
+          "פתחנו לך וואטסאפ. הורד קודם את המדבקה ואז שלח מהנייד.",
+        );
       } else if (result === "unsupported") {
         setShareNotice("הדפדפן לא תומך בשיתוף ישיר. הורד והעלה ידנית.");
       }
@@ -97,146 +96,311 @@ export default function GalleryPage() {
   }, []);
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center overflow-hidden bg-gradient-to-b from-white to-gray-50 px-6 py-6 dark:from-gray-950 dark:to-gray-900">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[400px] bg-gradient-to-b from-[color:var(--brand-green)]/5 via-transparent to-transparent dark:from-[color:var(--brand-green)]/10"
-      />
+    <main
+      dir="rtl"
+      className="relative min-h-screen text-ink"
+      style={{
+        background: "var(--cream)",
+        backgroundImage: `
+          radial-gradient(circle at 18% 18%, rgba(255,110,181,0.14), transparent 60%),
+          radial-gradient(circle at 88% 82%, rgba(37,211,102,0.16), transparent 65%)
+        `,
+        fontFamily: "'Assistant', system-ui, sans-serif",
+      }}
+    >
+      <div className="relative z-10 mx-auto max-w-6xl px-6 py-6 lg:px-8">
+        <TopBar active="gallery" signedIn={isLoaded && !!isSignedIn} />
 
-      <div className="relative w-full max-w-4xl space-y-8">
         {/* Header */}
-        <header className="flex items-center justify-between">
+        <div className="mb-7 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <div
+              className="mb-1 text-xs font-bold uppercase tracking-wider"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                opacity: 0.55,
+              }}
+            >
+              הגלריה שלי
+            </div>
+            <h1
+              style={{
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontWeight: 700,
+                fontSize: 56,
+                lineHeight: 0.95,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {items === null
+                ? "טוען..."
+                : items.length === 0
+                  ? "מתחילים?"
+                  : "המדבקות שלי"}
+            </h1>
+            <p
+              className="mt-1 max-w-xl text-[15px] font-bold"
+              style={{ opacity: 0.65 }}
+            >
+              {items === null
+                ? ""
+                : items.length === 0
+                  ? "עוד אין כלום פה — בואו נשנה את זה."
+                  : `${items.length} מדבקות, ממוינות מהחדשה לישנה. נשמרות במכשיר שלך בלבד.`}
+            </p>
+          </div>
           <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-xl border-2 border-white bg-black px-3 py-1.5 text-xl font-black text-white shadow-lg shadow-black/10 transition-transform hover:scale-[1.02] dark:border-gray-700 dark:bg-gray-100 dark:text-black"
+            href="/templates"
+            className="press-active inline-flex items-center gap-2 px-5 py-3 text-base font-extrabold"
+            style={{
+              background: "var(--wa)",
+              color: "#fff",
+              border: "2.5px solid var(--ink)",
+              borderRadius: 16,
+              boxShadow: "5px 6px 0 var(--ink)",
+              fontFamily: "'Karantina', 'Heebo', sans-serif",
+              fontSize: 22,
+            }}
           >
-            Madbeka
+            <Plus size={18} />
+            מדבקה חדשה
           </Link>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            {isLoaded && isSignedIn ? (
-              <>
-                <Link
-                  href="/account"
-                  className="hidden text-sm font-medium text-gray-700 hover:text-black sm:inline dark:text-gray-300 dark:hover:text-white"
-                >
-                  החשבון שלי
-                </Link>
-                <UserButton />
-              </>
-            ) : null}
-          </div>
-        </header>
-
-        <div className="space-y-2 text-right">
-          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--brand-green-dark)] dark:text-[color:var(--brand-green)]">
-            הגלריה שלי
-          </div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-gray-50">
-            המדבקות שיצרת
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            כל המדבקות נשמרות <strong>רק במכשיר שלך</strong>. כלום לא עולה
-            לאף שרת — זאת הסיבה שהגלריה לא תופיע במכשיר אחר.
-          </p>
         </div>
 
         {shareNotice && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-right text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+          <div
+            className="mb-5 rounded-2xl px-5 py-3.5 text-right text-sm font-bold"
+            style={{
+              background: "var(--paper)",
+              border: "2px dashed var(--ink)",
+            }}
+          >
             {shareNotice}
           </div>
         )}
 
+        {/* Grid */}
         {items === null ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-square animate-pulse rounded-2xl bg-gray-200 dark:bg-gray-800"
+                className="aspect-square animate-pulse"
+                style={{
+                  background: "rgba(15,14,12,0.06)",
+                  border: "2.5px solid var(--ink)",
+                  borderRadius: 20,
+                  boxShadow: "5px 6px 0 var(--ink)",
+                }}
               />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-3xl border-2 border-dashed border-gray-300 bg-white p-12 text-center shadow-sm dark:border-gray-700 dark:bg-gray-900">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[color:var(--brand-green)]/10 to-[color:var(--brand-green)]/20 text-3xl dark:from-[color:var(--brand-green)]/20 dark:to-[color:var(--brand-green)]/30">
-              🖼️
+          /* Empty state — dashed grid + CTA */
+          <div
+            className="grid place-items-center px-6 py-20 text-center"
+            style={{
+              background: "#fff",
+              border: "3px dashed var(--ink)",
+              borderRadius: 24,
+              boxShadow: "6px 7px 0 var(--ink)",
+            }}
+          >
+            <div
+              className="mb-5 grid h-20 w-20 place-items-center"
+              style={{
+                background: "var(--paper)",
+                border: "2.5px solid var(--ink)",
+                borderRadius: 22,
+                boxShadow: "4px 5px 0 var(--ink)",
+                transform: "rotate(-4deg)",
+              }}
+            >
+              <ImageIcon size={32} strokeWidth={2.4} />
             </div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-50">
-              הגלריה ריקה
+            <h2
+              style={{
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontWeight: 700,
+                fontSize: 44,
+                lineHeight: 1,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              עוד אין מדבקות
             </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              כל מדבקה שתיצור תופיע כאן אוטומטית.
+            <p
+              className="mb-7 mt-2 max-w-md text-[15px] font-bold"
+              style={{ opacity: 0.7 }}
+            >
+              כל מדבקה שתיצור תופיע כאן אוטומטית — ישר במכשיר שלך, בלי שרת.
             </p>
             <Link
-              href="/"
-              className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[color:var(--brand-green)] to-[color:var(--brand-green-dark)] px-5 text-sm font-semibold text-white shadow-lg shadow-[color:var(--brand-green)]/30"
+              href="/templates"
+              className="press-active inline-flex items-center gap-2 px-6 py-3.5 text-lg font-extrabold"
+              style={{
+                background: "var(--wa)",
+                color: "#fff",
+                border: "2.5px solid var(--ink)",
+                borderRadius: 16,
+                boxShadow: "5px 6px 0 var(--ink)",
+                fontFamily: "'Karantina', 'Heebo', sans-serif",
+                fontSize: 22,
+              }}
             >
+              <Plus size={20} />
               צור מדבקה ראשונה
             </Link>
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-              <Link
-                href="/"
-                className="font-medium text-[color:var(--brand-green-dark)] hover:underline dark:text-[color:var(--brand-green)]"
-              >
-                + צור מדבקה חדשה
-              </Link>
-              <span>{items.length} מדבקות</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-              {items.map((item) => (
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+            {items.map((item, i) => {
+              const tilt = ((i % 5) - 2) * 1.5;
+              return (
                 <div
                   key={item.id}
-                  className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg dark:border-gray-800 dark:bg-gray-900"
+                  className="group flex flex-col overflow-hidden"
+                  style={{
+                    background: "#fff",
+                    border: "2.5px solid var(--ink)",
+                    borderRadius: 20,
+                    boxShadow: "6px 7px 0 var(--ink)",
+                  }}
                 >
-                  <div className="checkerboard relative aspect-square">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.url}
-                      alt="מדבקה"
-                      className="h-full w-full object-contain p-3"
-                    />
-                    {/* Hover overlay with actions */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/0 opacity-0 transition-all group-hover:bg-black/50 group-hover:opacity-100">
+                  {/* Preview */}
+                  <div
+                    className="checker relative aspect-square"
+                    style={{
+                      borderBottom: "2px solid var(--ink)",
+                    }}
+                  >
+                    <span
+                      className="absolute inset-0"
+                      style={{ transform: `rotate(${tilt}deg)` }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.url}
+                        alt="מדבקה"
+                        className="h-full w-full object-contain p-3"
+                      />
+                    </span>
+                    {/* Hover/tap actions */}
+                    <div
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                      style={{
+                        background: "rgba(15,14,12,0.7)",
+                        backdropFilter: "blur(2px)",
+                      }}
+                    >
                       <button
                         onClick={() => onShare(item)}
                         disabled={sharingId === item.id}
-                        className="h-9 w-28 rounded-lg bg-[#25D366] text-xs font-semibold text-white shadow-md hover:bg-[#128C7E]"
+                        className="press-active inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold disabled:opacity-50"
+                        style={{
+                          background: "var(--wa)",
+                          color: "#fff",
+                          border: "2px solid var(--ink)",
+                          borderRadius: 11,
+                          boxShadow: "3px 4px 0 var(--ink)",
+                        }}
                       >
-                        {sharingId === item.id ? "..." : "שלח לוואטסאפ"}
+                        <Send size={13} />
+                        {sharingId === item.id ? "מכין..." : "שתף"}
                       </button>
                       <button
                         onClick={() => onDownload(item)}
-                        className="h-9 w-28 rounded-lg bg-white text-xs font-semibold text-gray-900 shadow-md hover:bg-gray-100"
+                        className="press-active inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold"
+                        style={{
+                          background: "#fff",
+                          color: "var(--ink)",
+                          border: "2px solid var(--ink)",
+                          borderRadius: 11,
+                          boxShadow: "3px 4px 0 var(--ink)",
+                        }}
                       >
+                        <Download size={13} />
                         הורד
                       </button>
                       <button
                         onClick={() => onDelete(item.id)}
-                        className="h-9 w-28 rounded-lg bg-red-500 text-xs font-semibold text-white shadow-md hover:bg-red-600"
+                        className="press-active inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold"
+                        style={{
+                          background: "var(--accent-red)",
+                          color: "#fff",
+                          border: "2px solid var(--ink)",
+                          borderRadius: 11,
+                          boxShadow: "3px 4px 0 var(--ink)",
+                        }}
                       >
+                        <Trash2 size={13} />
                         מחק
                       </button>
                     </div>
                   </div>
-                  <div className="border-t border-gray-100 px-3 py-2 text-right text-[11px] text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                    {formatRelative(item.createdAt)}
+                  {/* Card footer */}
+                  <div className="flex items-center justify-between bg-white px-3 py-2">
+                    <div
+                      className="text-[11px]"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        opacity: 0.6,
+                      }}
+                    >
+                      {formatRelative(item.createdAt)}
+                    </div>
+                    <div className="flex gap-1 sm:hidden">
+                      <button
+                        onClick={() => onShare(item)}
+                        title="שתף"
+                        className="grid h-8 w-8 place-items-center"
+                        style={{
+                          background: "transparent",
+                          border: "1.5px solid var(--ink)",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Send size={13} />
+                      </button>
+                      <button
+                        onClick={() => onDownload(item)}
+                        title="הורד"
+                        className="grid h-8 w-8 place-items-center"
+                        style={{
+                          background: "transparent",
+                          border: "1.5px solid var(--ink)",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Download size={13} />
+                      </button>
+                      <button
+                        onClick={() => onDelete(item.id)}
+                        title="מחק"
+                        className="grid h-8 w-8 place-items-center"
+                        style={{
+                          background: "transparent",
+                          border: "1.5px solid var(--ink)",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Mobile-friendly hint — hover actions aren't obvious on touch */}
-            <p className="pt-2 text-center text-xs text-gray-500 dark:text-gray-500 sm:hidden">
-              לחץ על מדבקה לפעולות
-            </p>
-          </>
+              );
+            })}
+          </div>
         )}
 
-        <footer className="pt-8 text-center text-xs text-gray-500 dark:text-gray-500">
+        <footer
+          className="mt-10 pt-6 text-center text-xs font-bold"
+          style={{
+            color: "#5a4252",
+            borderTop: "1.5px dashed var(--ink)",
+          }}
+        >
           {PUBLIC_DOMAIN} · הגלריה נשמרת במכשיר שלך בלבד
         </footer>
       </div>
