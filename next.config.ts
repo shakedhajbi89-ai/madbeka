@@ -52,8 +52,11 @@ const csp = [
   // Clerk profile pics (img.clerk.com is where uploaded avatars live;
   // *.clerk.com covers OAuth-fetched images from Google/Apple).
   "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.com https://www.google-analytics.com https://www.googletagmanager.com",
-  // Connect: self + Clerk API + GA/GTM + imgly model CDN
-  `connect-src 'self' ${clerkConnectSrc} ${imglyConnect} https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com`,
+  // Connect: self + Clerk API + GA/GTM + imgly model CDN.
+  // blob: is required because @imgly fetch()es WASM model chunks it
+  // has cached locally as Blob URLs (separate from the dynamic import,
+  // which is gated by script-src).
+  `connect-src 'self' blob: ${clerkConnectSrc} ${imglyConnect} https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com`,
   // Frames: Clerk auth iframes only (no clickjacking)
   `frame-src ${clerkFrameSrc}`,
   // No embedding this site in iframes (clickjacking protection)
