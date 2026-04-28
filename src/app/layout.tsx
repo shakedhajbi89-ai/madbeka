@@ -24,6 +24,7 @@ import { GoogleAnalytics } from "@/components/google-analytics";
 import { SplashScreen } from "@/components/splash-screen";
 import { SwRegistrar } from "@/components/sw-registrar";
 import { PUBLIC_URL } from "@/lib/brand";
+import { clerkAppearance } from "@/lib/clerk-theme";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -193,15 +194,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider
-      localization={heIL}
-      appearance={{
-        variables: {
-          colorPrimary: "#25D366",
-          fontFamily: "var(--font-heebo), system-ui, sans-serif",
-        },
-      }}
-    >
+    <ClerkProvider localization={heIL} appearance={clerkAppearance}>
       <html
         lang="he"
         dir="rtl"
