@@ -3,11 +3,9 @@ import { redirect } from "next/navigation";
 import { eq, desc } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import {
-  Download,
   ImageIcon,
   LogOut,
   Mail,
-  Share2,
   ShieldCheck,
   Sticker as StickerIcon,
   TrendingUp,
@@ -458,29 +456,27 @@ export default async function AccountPage() {
                 <div className="text-[13px]" style={{ opacity: 0.75 }}>
                   {event.wasPaidTier ? "Paid" : "Free"}
                 </div>
-                <div className="hidden justify-end gap-1.5 sm:flex">
-                  <button
-                    title="הורד"
-                    className="grid h-8 w-8 place-items-center"
+                {/* The actual sticker blobs live in IndexedDB on the device
+                    that created them — they're not in the DB. So we can't
+                    re-share/download from a server-rendered events log.
+                    Link to /gallery, which IS the IndexedDB browser. */}
+                <div className="hidden justify-end sm:flex">
+                  <Link
+                    href="/gallery"
+                    title="פתח גלריה"
+                    className="grid h-8 place-items-center px-2.5 text-[11px] font-extrabold"
                     style={{
                       background: "transparent",
                       border: "1.5px solid var(--ink)",
                       borderRadius: 8,
+                      gap: 5,
+                      display: "inline-flex",
+                      alignItems: "center",
                     }}
                   >
-                    <Download size={13} />
-                  </button>
-                  <button
-                    title="שתף"
-                    className="grid h-8 w-8 place-items-center"
-                    style={{
-                      background: "transparent",
-                      border: "1.5px solid var(--ink)",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Share2 size={13} />
-                  </button>
+                    <ImageIcon size={12} />
+                    גלריה
+                  </Link>
                 </div>
               </div>
             ))}

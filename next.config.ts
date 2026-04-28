@@ -26,7 +26,6 @@ const clerkFrameSrc = [
   "https://*.clerk.accounts.dev",
   "https://clerk.dev",
   "https://*.clerk.dev",
-  "https://*.lclark.com",
   "https://*.lclerk.com",
 ].join(" ");
 

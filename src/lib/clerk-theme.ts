@@ -308,15 +308,18 @@ export const clerkAppearance: Appearance = {
       backgroundColor: PAPER,
       borderRight: `2px solid ${INK}`,
     },
+    // Clerk's mini CSS-in-JS supports pseudo-class selectors like
+    // `&:hover` / `&:active` but does NOT support attribute selectors.
+    // An earlier version had `"&[data-selected]"` here which was silently
+    // ignored at best and crashed Clerk's appearance parser at worst —
+    // suspected as the cause of the production 500s during /handshake.
+    // The selected-tab visual state now comes from Clerk's defaults
+    // (which already darken the active item).
     navbarButton: {
       fontFamily: FONT_BODY,
       fontWeight: 700,
       color: INK,
       borderRadius: "10px",
-      "&[data-selected]": {
-        backgroundColor: INK,
-        color: CREAM,
-      },
     },
 
     // Misc small text

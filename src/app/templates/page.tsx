@@ -232,11 +232,17 @@ export default function TemplatesPage() {
       }
       try {
         const res = await fetch("/api/stickers/me");
-        if (!res.ok) return;
+        // 401 (signed-out) is the steady-state for anonymous visitors —
+        // not an error worth logging. Other failures (5xx, network) are.
+        if (res.status === 401) return;
+        if (!res.ok) {
+          console.warn("[stickers/me] non-OK response:", res.status);
+          return;
+        }
         const data = (await res.json()) as UserStatus;
         if (!cancelled) setStatus(data);
-      } catch {
-        /* silent */
+      } catch (err) {
+        console.warn("[stickers/me] fetch failed:", err);
       }
     })();
     return () => {
@@ -341,7 +347,8 @@ export default function TemplatesPage() {
       setSelectedId(newLayer.id);
       setImageTick((t) => t + 1);
       setNotice("");
-    } catch {
+    } catch (err) {
+      console.error("[image-ingest] failed:", err);
       setNotice("לא הצלחנו לטעון את התמונה. נסה תמונה אחרת.");
     }
   }, []);
