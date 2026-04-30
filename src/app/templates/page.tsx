@@ -940,8 +940,12 @@ export default function TemplatesPage() {
           <div className="flex min-w-0 flex-col gap-4">
             {/* CANVAS */}
             <div className="grid place-items-center pt-3 pb-1">
+              {/* w-full ensures the rotated wrapper never shrink-fits below
+                  the column width on mobile. Without it, transform creates a
+                  new containing block that is only 540px wide, so the inner
+                  maxWidth:"100%" resolves to 540px instead of the viewport. */}
               <div
-                className="relative"
+                className="relative w-full"
                 style={{ transform: `rotate(${CANVAS_TILT}deg)` }}
               >
                 <div
@@ -949,11 +953,11 @@ export default function TemplatesPage() {
                   onDragOver={onDragOverCanvas}
                   onDragLeave={onDragLeaveCanvas}
                   onDrop={onDropCanvas}
-                  className="checker relative grid place-items-center"
+                  className="checker relative mx-auto grid place-items-center"
                   style={{
                     width: 540,
                     height: 540,
-                    maxWidth: "100%",
+                    maxWidth: "calc(100% - 8px)",
                     maxHeight: "100vw",
                     border: "4px solid var(--ink)",
                     borderRadius: 28,
