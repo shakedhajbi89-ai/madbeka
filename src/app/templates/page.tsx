@@ -828,6 +828,11 @@ export default function TemplatesPage() {
           radial-gradient(circle at 12% 80%, #ffe0c2 0, transparent 22%)
         `,
         fontFamily: "'Assistant', system-ui, sans-serif",
+        /* overflow-x:clip prevents horizontal scroll from any child that
+           bleeds outside the viewport (SVG decorative paths, toolbar buttons
+           on narrow screens). Unlike overflow-x:hidden it does NOT create a
+           new scroll container, so position:sticky inside still works. */
+        overflowX: "clip",
       }}
     >
       {/* Unified sticky header — logo + auth */}
@@ -914,7 +919,7 @@ export default function TemplatesPage() {
       <svg
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 h-full w-full"
-        style={{ opacity: 0.22 }}
+        style={{ opacity: 0.22, overflow: "hidden" }}
       >
         <path
           d="M -50 200 Q 100 150, 220 220 T 470 200"
@@ -932,7 +937,7 @@ export default function TemplatesPage() {
         />
       </svg>
 
-      <main className="relative z-10 mx-auto max-w-7xl overflow-x-clip px-6 py-6 lg:px-8">
+      <main className="relative z-10 mx-auto max-w-7xl px-6 py-6 lg:px-8">
 
         {/* MAIN GRID */}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
