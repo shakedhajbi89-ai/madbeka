@@ -21,6 +21,7 @@ export function Footer({ variant = "minimal" }: FooterProps) {
             <span className="opacity-70">© מדבקה 2026</span>
           </div>
           <nav className="flex items-center gap-4 opacity-70" aria-label="קישורים משפטיים">
+            <Link href="/help" className="hover:opacity-100 transition-opacity">עזרה</Link>
             <Link href="/privacy" className="hover:opacity-100 transition-opacity">פרטיות</Link>
             <Link href="/terms" className="hover:opacity-100 transition-opacity">תנאי שימוש</Link>
             <Link href="/refund" className="hover:opacity-100 transition-opacity">החזרים</Link>
@@ -76,7 +77,7 @@ export function Footer({ variant = "minimal" }: FooterProps) {
               links: [
                 ["עורך", "/templates"],
                 ["גלריה", "/gallery"],
-                ["חידושים", "/terms"],
+                ["עזרה", "/help"],
               ],
             },
             {

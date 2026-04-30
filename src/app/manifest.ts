@@ -12,22 +12,37 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Madbeka — מתמונה למדבקה תוך 10 שניות",
-    short_name: "Madbeka",
+    name: "מדבקה — מדבקות וואטסאפ בעברית",
+    short_name: "מדבקה",
     description:
-      "מחולל המדבקות הישראלי הכי מהיר. הופכים תמונה למדבקת וואטסאפ תוך 10 שניות.",
+      "עורך המדבקות הישראלי הכי מהיר. כתוב בעברית, עצב, ושלח לוואטסאפ תוך שניות.",
     start_url: "/",
     // standalone hides the URL bar — the app feels native once installed.
     display: "standalone",
-    // Splash screen background while the app boots. White matches the
-    // wordmark-on-white icon; avoids a jarring color flash on launch.
-    background_color: "#ffffff",
-    // WhatsApp green for the Android status bar tint while inside the PWA.
-    theme_color: "#25D366",
-    orientation: "portrait",
+    // Cream brand background for the Android splash screen.
+    background_color: "#FBF3DC",
+    // Brand green for the Android status bar tint while inside the PWA.
+    theme_color: "#22C55E",
+    orientation: "portrait-primary",
     lang: "he",
     dir: "rtl",
-    categories: ["photo", "social", "utilities"],
+    categories: ["productivity", "social", "photo"],
+    screenshots: [
+      {
+        src: "/screenshots/mobile",
+        sizes: "390x844",
+        type: "image/png",
+        form_factor: "narrow",
+        label: "מסך עורך מדבקות — נייד",
+      },
+      {
+        src: "/screenshots/wide",
+        sizes: "1280x720",
+        type: "image/png",
+        form_factor: "wide",
+        label: "מסך עורך מדבקות — דסקטופ",
+      },
+    ],
     icons: [
       {
         src: "/icons/any/192",

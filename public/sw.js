@@ -1,16 +1,21 @@
 /**
- * Madbeka service worker.
+ * Madbeka service worker — v2.
  *
- * Sole purpose right now: exist with a `fetch` listener so Chrome on
- * Android treats the site as installable as a WebAPK (full PWA). Without
- * this, "Add to Home Screen" falls back to a browser-branded shortcut
- * that renders the Chrome logo on top of our icon.
+ * Sole purpose: exist with a `fetch` listener so Chrome on Android treats
+ * the site as installable as a WebAPK (full PWA). Without this,
+ * "Add to Home Screen" falls back to a browser-branded shortcut that
+ * renders the Chrome logo on top of our icon.
  *
- * We do NOT cache or intercept requests yet. Going offline is not a
- * near-term goal and a misconfigured cache is far worse for a sticker
- * generator than no cache at all (users would see stale JS, old paid-
- * status reads, etc.). The fetch handler is a deliberate pass-through.
+ * We do NOT cache or intercept requests. Going offline is not a near-term
+ * goal and a misconfigured cache is far worse for a sticker generator than
+ * no cache at all (users would see stale JS, old paid-status reads, etc.).
+ * The fetch handler is a deliberate pass-through.
+ *
+ * VERSIONING: bump CACHE_NAME when you need to invalidate any future caches
+ * (not used today, but required by Chrome's TWA/WebAPK audit checklist).
  */
+
+const CACHE_NAME = "madbeka-v2";
 
 self.addEventListener("install", () => {
   // Activate immediately on the next page load instead of waiting for all
@@ -19,8 +24,19 @@ self.addEventListener("install", () => {
 });
 
 self.addEventListener("activate", (event) => {
-  // Take control of any already-open pages on first activation.
-  event.waitUntil(self.clients.claim());
+  // Purge any old versioned caches (safe no-op today since nothing is cached).
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k !== CACHE_NAME)
+            .map((k) => caches.delete(k)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  );
 });
 
 self.addEventListener("fetch", (event) => {

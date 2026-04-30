@@ -402,12 +402,37 @@ body {
 /* ============================================================
    REDUCED MOTION
    ============================================================ */
+/* ============================================================
+   SKELETON SHIMMER
+   ============================================================ */
+@keyframes skeleton-wave {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.45) 50%,
+    transparent 100%
+  );
+  animation: skeleton-wave 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .float-tile,
   .progress-stripes,
   .confetti-piece,
   .anim-slide-down,
-  .anim-scale-in {
+  .anim-scale-in,
+  .skeleton-shimmer::after {
     animation: none;
   }
 }

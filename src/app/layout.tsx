@@ -25,6 +25,7 @@ import { SplashScreen } from "@/components/splash-screen";
 import { SwRegistrar } from "@/components/sw-registrar";
 import { PUBLIC_URL } from "@/lib/brand";
 import { ToastProvider } from "@/components/Toast";
+import { OfflineBanner } from "@/components/OfflineBanner";
 // Clerk theme temporarily disabled — caused Internal Server Error in
 // production. Will re-enable after debugging the Appearance shape.
 // import { clerkAppearance } from "@/lib/clerk-theme";
@@ -241,6 +242,7 @@ export default function RootLayout({
           />
         </head>
         <body className="min-h-full flex flex-col font-sans">
+          <OfflineBanner />
           <SplashScreen />
           <ToastProvider>
             {children}
