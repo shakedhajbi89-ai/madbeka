@@ -96,11 +96,9 @@ const ALIGN_OPTIONS: { id: TextStickerAlign; label: string }[] = [
 
 const DEFAULT_WORD_SIZE = 160;
 const DEFAULT_EMOJI_OFFSET_Y = -130;
-const CANVAS_TILT = -1.5; // degrees — gives the canvas its "stuck on the wall" feel
-const SHADOW_DEPTH = 8;   // px — the signature hard offset shadow on the canvas
+const CANVAS_TILT = -1.5; // degrees
+const SHADOW_DEPTH = 8;
 
-// Stable ID generator. Using crypto.randomUUID when available, fallback to a
-// counter for SSR robustness.
 let idCounter = 0;
 function uid(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -173,6 +171,9 @@ function layerTypeLabel(layer: StickerLayer): string {
   return "מילה";
 }
 
+// ── Option panel types ──────────────────────────────────────────
+type OptionPanel = "font" | "color" | "emoji" | "layers" | null;
+
 export default function TemplatesPage() {
   const { isSignedIn, isLoaded } = useAuth();
 
@@ -190,11 +191,13 @@ export default function TemplatesPage() {
   const [bgRemovalStage, setBgRemovalStage] = useState<BgRemovalStage | null>(null);
   const { success: toastSuccess, error: toastError, info: toastInfo, warning: toastWarning } = useToast();
 
-  // Post-share / post-download instructions modal. WhatsApp doesn't expose
-  // a "send as sticker" web intent, so we always end up sending a .webp
-  // attachment which the user has to long-press → "Add to Stickers". The
-  // modal walks through the platform-specific steps so it doesn't feel like
-  // an "ואז ואז ואז" experience.
+  // Active bottom panel (font/color/emoji/layers)
+  const [activePanel, setActivePanel] = useState<OptionPanel>(null);
+
+  const togglePanel = useCallback((panel: OptionPanel) => {
+    setActivePanel((prev) => (prev === panel ? null : panel));
+  }, []);
+
   const [postActionModal, setPostActionModal] = useState<
     | { kind: "shared" }
     | { kind: "fallback" }
@@ -204,9 +207,6 @@ export default function TemplatesPage() {
     | null
   >(null);
 
-  // Native (Capacitor / Android) feature gate. Detected on mount so SSR
-  // produces the same HTML as the first client render — Capacitor
-  // injects its globals before our React bundle hydrates.
   const [isNative, setIsNative] = useState(false);
   useEffect(() => {
     setIsNative(isNativeAndroid());
@@ -265,7 +265,6 @@ export default function TemplatesPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("paid") === "1") {
       setShowPaymentSuccess(true);
-      // Refresh user status so watermark disappears immediately
       if (isSignedIn) {
         fetch("/api/stickers/me").then(async (r) => {
           if (r.ok) {
@@ -287,8 +286,6 @@ export default function TemplatesPage() {
       }
       try {
         const res = await fetch("/api/stickers/me");
-        // 401 (signed-out) is the steady-state for anonymous visitors —
-        // not an error worth logging. Other failures (5xx, network) are.
         if (res.status === 401) return;
         if (!res.ok) {
           console.warn("[stickers/me] non-OK response:", res.status);
@@ -473,13 +470,9 @@ export default function TemplatesPage() {
     return () => window.removeEventListener("paste", onPaste);
   }, [ingestImageFile]);
 
-  // Background removal (browser-side WASM, no server).
+  // Background removal
   const [isRemovingBg, setIsRemovingBg] = useState(false);
   const removeBackgroundFromSelected = useCallback(async () => {
-    // Resolve the target image: prefer the currently selected layer,
-    // fall back to the topmost image layer in the stack. This makes the
-    // "Remove background" action forgiving — users instinctively click it
-    // after uploading without first selecting the layer in the sidebar.
     let target = selectedImage;
     if (!target) {
       const fallback = [...layers]
@@ -490,11 +483,6 @@ export default function TemplatesPage() {
         setSelectedId(fallback.id);
       }
     }
-    console.log("[bg-removal] click", {
-      hasSelectedImage: !!selectedImage,
-      resolvedTarget: target?.id ?? null,
-      layerCount: layers.length,
-    });
     if (!target) {
       setNotice("אין תמונה. העלה תמונה קודם, ואז לחץ על 'הסר רקע'.");
       return;
@@ -503,20 +491,12 @@ export default function TemplatesPage() {
     setBgRemovalStage(1);
     setNotice("");
     try {
-      console.log("[bg-removal] importing @imgly/background-removal...");
       setBgRemovalStage(2);
       const { removeBackground } = await import("@imgly/background-removal");
-      // Decode data: URLs locally instead of round-tripping through fetch().
-      // CSP `connect-src` doesn't allow `data:` (and we don't want to add
-      // it — it'd defeat the protection), so a fetch() call on a base64
-      // data URL throws "Refused to connect". This branch handles both
-      // data: URLs (post-paste / post-bg-removal layers) and blob: URLs
-      // (fresh uploads via createObjectURL) without ever touching fetch.
-      console.log("[bg-removal] preparing blob from", target.src.slice(0, 30));
       let inputBlob: Blob;
       if (target.src.startsWith("data:")) {
         const commaIdx = target.src.indexOf(",");
-        const header = target.src.slice(5, commaIdx); // strip "data:"
+        const header = target.src.slice(5, commaIdx);
         const isBase64 = header.endsWith(";base64");
         const mime = isBase64 ? header.slice(0, -7) : header;
         const payload = target.src.slice(commaIdx + 1);
@@ -531,13 +511,10 @@ export default function TemplatesPage() {
           });
         }
       } else {
-        // blob:/http(s) URLs — fetch is allowed and necessary.
         inputBlob = await (await fetch(target.src)).blob();
       }
-      console.log("[bg-removal] running model on blob size", inputBlob.size);
       setBgRemovalStage(3);
       const resultBlob = await removeBackground(inputBlob);
-      console.log("[bg-removal] success, output size", resultBlob.size);
       setBgRemovalStage(4);
 
       const newDataUrl = await new Promise<string>((resolve, reject) => {
@@ -560,9 +537,6 @@ export default function TemplatesPage() {
       toastSuccess("הרקע הוסר בהצלחה!");
       setNotice("");
     } catch (err) {
-      // Surface the underlying error in DevTools — the user-facing notice
-      // is intentionally generic, but without this log we have no way to
-      // tell whether it's CSP, network, WASM, or a model-format issue.
       console.error("[bg-removal] failed:", err);
       toastError("לא הצלחנו להסיר את הרקע.", "נסה תמונה אחרת.");
       setNotice("לא הצלחנו להסיר את הרקע. נסה תמונה אחרת.");
@@ -572,7 +546,7 @@ export default function TemplatesPage() {
     }
   }, [selectedImage, selectedId, layers.length, updateLayer, toastSuccess, toastError]);
 
-  // Preset click — wipes the stack and seeds with one word layer.
+  // Preset click
   const applyTemplate = useCallback((t: TemplateDef) => {
     const newLayer = makeWordLayer({
       text: t.text,
@@ -614,7 +588,7 @@ export default function TemplatesPage() {
       const res = await fetch("/api/stickers/log", { method: "POST" });
       if (res.status === 402) {
         setWorking(null);
-        toastInfo("סיימת את 3 החינמיים", "שדרג להמשיך · ₪29 חד פעמי.");
+        toastInfo("סיימת את 3 החינמיים", "שדרג להמשיך · ₪35 חד פעמי.");
         setShowPaywall(true);
         return;
       }
@@ -638,34 +612,18 @@ export default function TemplatesPage() {
     }
   }, [isSignedIn, renderCurrent, primaryLabel, toastInfo, toastError]);
 
-  /**
-   * Native-only: bundle the user's gallery into a WhatsApp sticker pack
-   * and ask WhatsApp to add it. Hidden behind {@link isNative} — on the
-   * web this code path is unreachable and the JS tree-shakes cleanly.
-   *
-   * The current sticker (whatever's on the canvas) is saved to gallery
-   * first so it ends up in the pack we're about to ship.
-   */
   const onAddToWhatsAppPack = useCallback(async () => {
     setWorking("share");
     setNotice("");
     try {
-      // Make sure the in-progress sticker is actually in the gallery
-      // before we count — otherwise users hit "needs more" right after
-      // creating their third one.
       const blob = await renderCurrent();
       await saveToGallery(blob, primaryLabel);
-
       const missing = await stickersNeededForPack();
       if (missing > 0) {
         setPostActionModal({ kind: "needs-more", missing });
         return;
       }
-
       const pack = await buildPackFromGallery({
-        // One pack per device for now. The id has to be stable across
-        // re-adds so WhatsApp updates the existing pack rather than
-        // creating duplicates.
         packId: "madbeka-default",
         packName: "המדבקות שלי",
       });
@@ -673,12 +631,11 @@ export default function TemplatesPage() {
         setPostActionModal({ kind: "needs-more", missing: 1 });
         return;
       }
-
       const result = await addPackToWhatsApp(pack);
       if (result.status === "added") {
         setPostActionModal({ kind: "added-to-pack" });
       } else if (result.status === "cancelled") {
-        // user dismissed WhatsApp's confirmation dialog — stay quiet.
+        // user dismissed
       } else {
         console.error("[whatsapp-pack] add failed:", result.message);
         setNotice(result.message || "ההוספה ל-WhatsApp נכשלה. נסה שוב.");
@@ -707,7 +664,6 @@ export default function TemplatesPage() {
         toastError("שיתוף נכשל — נסה שוב או הורד את הקובץ ישירות.", undefined);
         setNotice("הדפדפן לא תומך בשיתוף ישיר. נסה להוריד ולשתף ידנית.");
       }
-      // "cancelled" → user dismissed share sheet; stay quiet, no modal.
     } catch (err) {
       console.error("[share] failed:", err);
       toastError("שיתוף נכשל — נסה שוב או הורד את הקובץ ישירות.");
@@ -815,6 +771,23 @@ export default function TemplatesPage() {
     [],
   );
 
+  // Suggestion words — clicking inserts as new word layer (or patches selected word)
+  const SUGGESTION_WORDS = [
+    "יאללה", "חלאס", "די", "סבבה", "אחי", "אש",
+    "קורע", "סחטיין", "67", "ריז", "קאפ", "סקיבידי",
+    "וואו", "נאיס", "בדיוק", "אמן", "ממש", "אהבה",
+  ];
+
+  const onSuggestionClick = useCallback((word: string) => {
+    if (selectedWord) {
+      patchSelected({ text: word });
+    } else {
+      const newLayer = makeWordLayer({ text: word });
+      setLayers((prev) => [...prev, newLayer]);
+      setSelectedId(newLayer.id);
+    }
+  }, [selectedWord, patchSelected]);
+
   return (
     <div
       dir="rtl"
@@ -828,17 +801,13 @@ export default function TemplatesPage() {
           radial-gradient(circle at 12% 80%, #ffe0c2 0, transparent 22%)
         `,
         fontFamily: "'Assistant', system-ui, sans-serif",
-        /* overflow-x:clip prevents horizontal scroll from any child that
-           bleeds outside the viewport (SVG decorative paths, toolbar buttons
-           on narrow screens). Unlike overflow-x:hidden it does NOT create a
-           new scroll container, so position:sticky inside still works. */
         overflowX: "clip",
       }}
     >
-      {/* Unified sticky header — logo + auth */}
+      {/* Unified sticky header */}
       <Header variant="minimal" />
 
-      {/* Editor toolbar — back nav + action buttons */}
+      {/* Editor toolbar — sticky below header */}
       <div
         className="sticky top-16 z-10 border-b"
         style={{
@@ -846,8 +815,8 @@ export default function TemplatesPage() {
           borderColor: "hsl(var(--border-soft))",
         }}
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between h-14 px-4 sm:px-6 lg:px-8">
-          {/* Back */}
+        <div className="mx-auto flex max-w-7xl items-center justify-between h-14 px-3 sm:px-6">
+          {/* Single back button */}
           <Link
             href="/"
             className="flex items-center gap-1.5 text-sm font-bold press-active"
@@ -857,33 +826,27 @@ export default function TemplatesPage() {
             חזור
           </Link>
 
-          {/* Center nav */}
-          <div className="hidden md:flex items-center gap-5 text-sm font-bold" style={{ color: "var(--ink)", opacity: 0.65 }}>
-            <Link href="/#how" className="hover:opacity-100 transition-opacity">איך זה עובד</Link>
-            <Link href="/#pricing" className="hover:opacity-100 transition-opacity">מחיר</Link>
-          </div>
-
-          {/* Right: undo / redo + download + share + user */}
-          <div className="flex items-center gap-2">
+          {/* Right: undo/redo + download + share + user */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Chip aria-label="ביטול" disabled>
-              <Undo2 size={16} />
+              <Undo2 size={15} />
             </Chip>
             <Chip aria-label="ביצוע מחדש" disabled>
-              <Redo2 size={16} />
+              <Redo2 size={15} />
             </Chip>
             {isSignedIn ? (
               <PlayfulBtn
                 onClick={onDownload}
                 disabled={working !== null}
                 kind="ghost"
-                icon={<Download size={15} />}
+                icon={<Download size={14} />}
               >
                 {working === "download" ? "מוריד..." : "הורד"}
               </PlayfulBtn>
             ) : (
               <SignUpButton mode="modal">
-                <PlayfulBtn kind="ghost" icon={<Download size={15} />}>
-                  הירשם והורד
+                <PlayfulBtn kind="ghost" icon={<Download size={14} />}>
+                  הירשם
                 </PlayfulBtn>
               </SignUpButton>
             )}
@@ -892,22 +855,22 @@ export default function TemplatesPage() {
                 onClick={onAddToWhatsAppPack}
                 disabled={working !== null}
                 kind="primary"
-                icon={<StickerIcon size={15} />}
+                icon={<StickerIcon size={14} />}
               >
-                {working === "share" ? "מוסיף..." : "הוסף למדבקות"}
+                {working === "share" ? "מוסיף..." : "הוסף"}
               </PlayfulBtn>
             ) : (
               <PlayfulBtn
                 onClick={onShare}
                 disabled={working !== null}
                 kind="primary"
-                icon={<Send size={15} />}
+                icon={<Send size={14} />}
               >
-                {working === "share" ? "מכין..." : "שלח לוואטסאפ"}
+                {working === "share" ? "מכין..." : "שלח"}
               </PlayfulBtn>
             )}
             {isLoaded && isSignedIn && (
-              <div className="ms-1">
+              <div className="ms-0.5">
                 <UserButton />
               </div>
             )}
@@ -915,7 +878,7 @@ export default function TemplatesPage() {
         </div>
       </div>
 
-      {/* hand-drawn squiggles, decorative only */}
+      {/* Decorative squiggles */}
       <svg
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 h-full w-full"
@@ -937,18 +900,527 @@ export default function TemplatesPage() {
         />
       </svg>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-6 py-6 lg:px-8">
+      {/* ── MOBILE LAYOUT (below lg) ── */}
+      <div className="relative z-10 lg:hidden flex flex-col px-3 pt-3 pb-4 gap-2"
+        style={{ maxWidth: 480, margin: "0 auto" }}>
 
-        {/* MAIN GRID */}
+        {/* ① Option buttons row */}
+        <div
+          className="flex items-center gap-2 overflow-x-auto pb-0.5"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <OptionBtn
+            icon={<TypeIcon size={15} />}
+            label="פונט"
+            active={activePanel === "font"}
+            onClick={() => togglePanel("font")}
+            disabled={!selectedWord}
+          />
+          <OptionBtn
+            icon={<Palette size={15} />}
+            label="צבע"
+            active={activePanel === "color"}
+            onClick={() => togglePanel("color")}
+            disabled={!selectedWord}
+          />
+          <OptionBtn
+            icon={<Smile size={15} />}
+            label="אימוג׳י"
+            active={activePanel === "emoji"}
+            onClick={() => togglePanel("emoji")}
+          />
+          <OptionBtn
+            icon={<Layers size={15} />}
+            label="שכבות"
+            active={activePanel === "layers"}
+            onClick={() => togglePanel("layers")}
+          />
+          <OptionBtn
+            icon={<Plus size={15} />}
+            label="מילה"
+            active={false}
+            onClick={addWordLayer}
+          />
+        </div>
+
+        {/* ② Canvas + vertical sliders */}
+        <div className="flex items-stretch gap-2">
+          {/* Canvas */}
+          <div className="relative flex-1 min-w-0">
+            <div
+              style={{ transform: `rotate(${CANVAS_TILT}deg)` }}
+              className="w-full"
+            >
+              <div
+                onDragEnter={onDragEnterCanvas}
+                onDragOver={onDragOverCanvas}
+                onDragLeave={onDragLeaveCanvas}
+                onDrop={onDropCanvas}
+                className="checker relative mx-auto grid place-items-center"
+                style={{
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  maxWidth: "calc(100vw - 88px)",
+                  border: "3px solid var(--ink)",
+                  borderRadius: 22,
+                  boxShadow: SHADOW_4,
+                }}
+              >
+                <canvas
+                  ref={previewRef}
+                  width={512}
+                  height={512}
+                  onPointerDown={onPointerDownCanvas}
+                  onPointerMove={onPointerMoveCanvas}
+                  onPointerUp={onPointerEndCanvas}
+                  onPointerCancel={onPointerEndCanvas}
+                  className="absolute inset-0 h-full w-full cursor-grab touch-none select-none active:cursor-grabbing"
+                  style={{ borderRadius: 19 }}
+                />
+                {isDragging && (
+                  <div
+                    className="pointer-events-none absolute inset-0 grid place-items-center"
+                    style={{
+                      background: "rgba(37, 211, 102, 0.18)",
+                      backdropFilter: "blur(6px)",
+                      borderRadius: 19,
+                    }}
+                  >
+                    <div
+                      className="rounded-2xl bg-white px-4 py-2 text-sm font-extrabold text-ink"
+                      style={{ border: "2.5px solid var(--ink)", boxShadow: SHADOW_3 }}
+                    >
+                      📥 שחרר כאן
+                    </div>
+                  </div>
+                )}
+
+                {/* tape strip */}
+                <div
+                  aria-hidden
+                  className="absolute"
+                  style={{
+                    top: -14,
+                    left: "50%",
+                    width: 100,
+                    height: 28,
+                    transform: "translateX(-50%) rotate(-4deg)",
+                    background: "rgba(255, 235, 120, 0.85)",
+                    border: "2px solid rgba(0,0,0,0.15)",
+                    zIndex: 4,
+                  }}
+                />
+
+                {/* Maximize */}
+                <button
+                  onClick={() => setZoomed(true)}
+                  aria-label="הגדל תצוגה"
+                  className="press-active absolute grid h-8 w-8 place-items-center"
+                  style={{
+                    top: 10,
+                    right: 10,
+                    background: "#fff",
+                    border: "2px solid var(--ink)",
+                    borderRadius: 10,
+                    boxShadow: SHADOW_2,
+                  }}
+                >
+                  <Maximize2 size={13} />
+                </button>
+
+                {/* Recenter */}
+                {selected && (selected.offsetX !== 0 || selected.offsetY !== 0) && (
+                  <button
+                    onClick={() => patchSelected({ offsetX: 0, offsetY: 0 })}
+                    aria-label="מרכז שכבה"
+                    className="press-active absolute flex items-center gap-1 px-2 text-[10px] font-extrabold"
+                    style={{
+                      bottom: 10,
+                      right: 10,
+                      height: 28,
+                      background: "#fff",
+                      border: "2px solid var(--ink)",
+                      borderRadius: 10,
+                      boxShadow: SHADOW_2,
+                    }}
+                  >
+                    🎯 מרכז
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Vertical sliders rail — 56px wide on the RTL start (left in LTR) */}
+          <div
+            className="flex flex-col items-center gap-2 flex-shrink-0"
+            style={{ width: 56 }}
+          >
+            {/* Size slider */}
+            <VerticalSliderBlock
+              icon={<Ruler size={12} />}
+              label="גודל"
+              value={selected?.size ?? DEFAULT_WORD_SIZE}
+              min={sizeSliderMin}
+              max={sizeSliderMax}
+              onChange={(v) => patchSelected({ size: v })}
+              disabled={!selected}
+            />
+            {/* Rotation slider */}
+            <VerticalSliderBlock
+              icon={<RotateCw size={12} />}
+              label="זווית"
+              value={selected?.rotation ?? 0}
+              min={rotSliderMin}
+              max={rotSliderMax}
+              onChange={(v) => patchSelected({ rotation: v })}
+              disabled={!selected}
+            />
+          </div>
+        </div>
+
+        {/* ③ Photo action row — directly below canvas */}
+        <div className="flex gap-2">
+          <ActionChip
+            icon={<Camera size={14} />}
+            label="צלם"
+            onClick={openImagePicker}
+          />
+          <ActionChip
+            icon={<ImageIcon size={14} />}
+            label="העלה"
+            onClick={openImagePicker}
+          />
+          <ActionChip
+            icon={<Sparkles size={14} />}
+            label={isRemovingBg ? "מסיר..." : "הסר רקע"}
+            disabled={!layers.some((l) => l.type === "image") || isRemovingBg}
+            onClick={removeBackgroundFromSelected}
+          />
+        </div>
+
+        {/* ④ Suggestion word chips */}
+        <div className="relative">
+          <div
+            className="flex gap-2 overflow-x-auto pb-1"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {SUGGESTION_WORDS.map((word) => (
+              <button
+                key={word}
+                onClick={() => onSuggestionClick(word)}
+                className="press-active flex-shrink-0 text-sm font-extrabold px-3"
+                style={{
+                  height: 38,
+                  background: "#fff",
+                  border: "2.5px solid var(--ink)",
+                  borderRadius: 100,
+                  boxShadow: SHADOW_2,
+                  color: "var(--ink)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {word}
+              </button>
+            ))}
+          </div>
+          {/* No fade overlay — chips strip has no artifact */}
+        </div>
+
+        {notice && (
+          <div
+            className="rounded-xl px-3 py-2 text-right text-xs font-bold"
+            style={{
+              background: "var(--paper)",
+              border: "2px dashed var(--ink)",
+              color: "var(--ink)",
+            }}
+          >
+            {notice}
+          </div>
+        )}
+
+        {/* ── Bottom sheet panels ── */}
+        {activePanel === "font" && selectedWord && (
+          <BottomPanel title="פונט" onClose={() => setActivePanel(null)}>
+            <div className="grid grid-cols-3 gap-2">
+              {FONT_OPTIONS.map((f) => {
+                const active = selectedWord.font === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => patchSelected({ font: f.id })}
+                    className="press-active py-3"
+                    style={{
+                      background: active ? "var(--ink)" : "#fff",
+                      color: active ? "#fff" : "var(--ink)",
+                      border: "2.5px solid var(--ink)",
+                      borderRadius: 14,
+                      boxShadow: active ? "none" : SHADOW_2,
+                      transform: active ? "translate(2px, 2px)" : "none",
+                    }}
+                  >
+                    <div style={{ ...fontButtonStyle[f.id], fontSize: 22, fontWeight: 800, lineHeight: 1 }}>
+                      {f.sample}
+                    </div>
+                    <div className="mt-1 text-[10px] font-extrabold" style={{ color: active ? "#fff" : "var(--ink)" }}>
+                      {f.label}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </BottomPanel>
+        )}
+
+        {activePanel === "color" && selectedWord && (
+          <BottomPanel title="צבע" onClose={() => setActivePanel(null)}>
+            <div className="grid grid-cols-5 gap-2">
+              {STYLE_OPTIONS.map((s) => {
+                const active = selectedWord.style === s.id;
+                const lightSwatch = ["classic", "pastel", "neon"].includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    title={s.label}
+                    onClick={() => {
+                      const prefFont = STYLE_PREFERRED_FONT[s.id];
+                      if (prefFont && prefFont !== selectedWord.font) {
+                        patchSelected({ style: s.id, font: prefFont });
+                      } else {
+                        patchSelected({ style: s.id });
+                      }
+                    }}
+                    className="relative aspect-square"
+                    style={{
+                      background: s.swatch,
+                      border: "2.5px solid var(--ink)",
+                      borderRadius: 12,
+                      boxShadow: active ? "none" : SHADOW_2,
+                      transform: active ? "translate(2px, 2px)" : "none",
+                    }}
+                  >
+                    {active && (
+                      <span className="absolute inset-0 grid place-items-center" style={{ color: lightSwatch ? "#000" : "#fff" }}>
+                        <Check size={14} strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Alignment */}
+            <div className="mt-3">
+              <div className="mb-1.5 text-[11px] font-extrabold uppercase" style={{ color: "#5a4252", letterSpacing: "0.04em" }}>יישור</div>
+              <div className="flex justify-end gap-2">
+                {ALIGN_OPTIONS.map((a) => {
+                  const active = selectedWord.align === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => patchSelected({ align: a.id })}
+                      className="press-active px-4 py-2 text-sm font-extrabold"
+                      style={{
+                        background: active ? "var(--ink)" : "#fff",
+                        color: active ? "#fff" : "var(--ink)",
+                        border: "2.5px solid var(--ink)",
+                        borderRadius: 12,
+                        boxShadow: active ? "none" : SHADOW_2,
+                        transform: active ? "translate(2px, 2px)" : "none",
+                      }}
+                    >
+                      {a.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </BottomPanel>
+        )}
+
+        {activePanel === "emoji" && (
+          <BottomPanel title="אימוג׳י" onClose={() => setActivePanel(null)}>
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {EMOJI_CATEGORIES.map((cat) => {
+                const isOpen = openEmojiCat === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setOpenEmojiCat(isOpen ? null : cat.id)}
+                    className="press-active flex items-center gap-1 px-2.5 py-1.5 text-xs font-extrabold"
+                    style={{
+                      background: isOpen ? "var(--ink)" : "#fff",
+                      color: isOpen ? "#fff" : "var(--ink)",
+                      border: "2.5px solid var(--ink)",
+                      borderRadius: 12,
+                      boxShadow: isOpen ? "none" : SHADOW_2,
+                      transform: isOpen ? "translate(2px, 2px)" : "none",
+                    }}
+                  >
+                    <span className="text-base leading-none">{cat.sample}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {openEmojiCat && (
+              <div className="mt-3 grid grid-cols-7 gap-1.5 pt-3" style={{ borderTop: "1.5px dashed var(--ink)" }}>
+                {EMOJI_CATEGORIES.find((c) => c.id === openEmojiCat)?.emojis.map((e, i) => (
+                  <button
+                    key={`${openEmojiCat}-${i}`}
+                    onClick={() => {
+                      addEmojiLayer(e);
+                      setActivePanel(null);
+                    }}
+                    className="grid aspect-square place-items-center text-xl transition-transform hover:scale-110"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </BottomPanel>
+        )}
+
+        {activePanel === "layers" && (
+          <BottomPanel title={`שכבות (${layers.length})`} onClose={() => setActivePanel(null)}>
+            <div className="space-y-1.5">
+              {[...layers].map((l, idx) => ({ l, idx })).reverse().map(({ l, idx }) => {
+                const isSelected = l.id === selectedId;
+                const atFront = idx === layers.length - 1;
+                const atBack = idx === 0;
+                return (
+                  <div
+                    key={l.id}
+                    className="flex items-center gap-1.5 px-2 py-2"
+                    style={{
+                      background: isSelected ? "var(--cream)" : "#fff",
+                      border: `2.5px solid ${isSelected ? "var(--ink)" : "#e0d6c2"}`,
+                      borderRadius: 14,
+                      boxShadow: isSelected ? SHADOW_2 : "none",
+                    }}
+                  >
+                    <MiniBtn aria-label="מחק" onClick={() => deleteLayer(l.id)}><Trash2 size={12} /></MiniBtn>
+                    <MiniBtn aria-label="אחורה" disabled={atBack} onClick={() => moveLayer(l.id, "back")}><ChevronDown size={12} /></MiniBtn>
+                    <MiniBtn aria-label="קדימה" disabled={atFront} onClick={() => moveLayer(l.id, "front")}><ChevronUp size={12} /></MiniBtn>
+                    <button
+                      onClick={() => setSelectedId(l.id)}
+                      className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden px-2 text-right"
+                    >
+                      <span className="truncate text-sm font-extrabold" style={l.type === "word" ? { fontFamily: fontStack(l.font) } : undefined}>
+                        {layerPreview(l)}
+                      </span>
+                      <span className="flex-shrink-0 text-[10px] font-extrabold uppercase" style={{ color: "#5a4252", letterSpacing: "0.04em" }}>
+                        {layerTypeLabel(l)}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                <button
+                  onClick={addWordLayer}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-extrabold"
+                  style={{ background: "var(--cream)", border: "2.5px dashed var(--ink)", borderRadius: 14, color: "var(--ink)" }}
+                >
+                  <Plus size={14} /> מילה חדשה
+                </button>
+                <button
+                  onClick={openImagePicker}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-extrabold"
+                  style={{ background: "var(--cream)", border: "2.5px dashed var(--ink)", borderRadius: 14, color: "var(--ink)" }}
+                >
+                  <Camera size={14} /> תמונה
+                </button>
+              </div>
+            </div>
+          </BottomPanel>
+        )}
+
+        {/* Text input — shown inline when word layer selected and no panel is open */}
+        {selectedWord && activePanel === null && (
+          <div
+            className="px-3 py-2.5"
+            style={{
+              background: "#fff",
+              border: "2.5px solid var(--ink)",
+              borderRadius: 18,
+              boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.06)",
+            }}
+          >
+            <input
+              dir="rtl"
+              value={selectedWord.text}
+              maxLength={30}
+              onChange={(e) => patchSelected({ text: e.target.value })}
+              placeholder="כתוב מילה..."
+              className="w-full bg-transparent text-right outline-none"
+              style={{
+                fontFamily: fontStack(selectedWord.font),
+                fontSize: 24,
+                fontWeight: 800,
+                color: "var(--ink)",
+                lineHeight: 1.2,
+              }}
+            />
+            <div className="mt-0.5 flex justify-between" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#5a4252" }}>
+              <span>{selectedWord.text.length}/30</span>
+              <span>גרור לשינוי מיקום</span>
+            </div>
+          </div>
+        )}
+
+        {/* Presets rail */}
+        <div>
+          <div className="mb-2 flex items-center gap-2 px-1 text-[13px] font-extrabold" style={{ letterSpacing: "-0.01em" }}>
+            <Sparkles size={14} />
+            מילים מוכנות
+            <span className="text-xs font-bold" style={{ color: "#5a4252" }}>· הקלק</span>
+          </div>
+          <div className="relative">
+            <div
+              className="templates-rail flex gap-2.5 overflow-x-auto pb-2 pt-1"
+              style={{ scrollbarColor: "var(--ink) transparent" }}
+            >
+              {TEMPLATES.map((t, i) => {
+                const tilt = ((i % 3) - 1) * 2.5;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => applyTemplate(t)}
+                    className="grid flex-none place-items-center transition-transform"
+                    style={{
+                      width: 90,
+                      height: 90,
+                      background: "#fff",
+                      border: "2.5px solid var(--ink)",
+                      borderRadius: 18,
+                      boxShadow: SHADOW_3,
+                      transform: `rotate(${tilt}deg)`,
+                      fontFamily: fontStack(t.font),
+                      fontSize: 20,
+                      fontWeight: 800,
+                      color: "var(--ink)",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = `rotate(${tilt}deg) translate(-2px, -2px)`)}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = `rotate(${tilt}deg)`)}
+                  >
+                    {t.text}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── DESKTOP LAYOUT (lg+) ── */}
+      <main className="relative z-10 mx-auto hidden max-w-7xl px-6 py-6 lg:block lg:px-8">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           {/* LEFT COLUMN — canvas + controls + presets */}
           <div className="flex min-w-0 flex-col gap-4">
             {/* CANVAS */}
             <div className="grid place-items-center pt-3 pb-1">
-              {/* w-full ensures the rotated wrapper never shrink-fits below
-                  the column width on mobile. Without it, transform creates a
-                  new containing block that is only 540px wide, so the inner
-                  maxWidth:"100%" resolves to 540px instead of the viewport. */}
               <div
                 className="relative w-full"
                 style={{ transform: `rotate(${CANVAS_TILT}deg)` }}
@@ -982,131 +1454,53 @@ export default function TemplatesPage() {
                   {isDragging && (
                     <div
                       className="pointer-events-none absolute inset-0 grid place-items-center"
-                      style={{
-                        background: "rgba(37, 211, 102, 0.18)",
-                        backdropFilter: "blur(6px)",
-                      }}
+                      style={{ background: "rgba(37, 211, 102, 0.18)", backdropFilter: "blur(6px)" }}
                     >
                       <div
                         className="rounded-2xl bg-white px-5 py-3 text-base font-extrabold text-ink"
-                        style={{
-                          border: "3px solid var(--ink)",
-                          boxShadow: SHADOW_4,
-                        }}
+                        style={{ border: "3px solid var(--ink)", boxShadow: SHADOW_4 }}
                       >
                         📥 שחרר תמונה כאן
                       </div>
                     </div>
                   )}
-
-                  {/* tape strip on top of the canvas */}
-                  <div
-                    aria-hidden
-                    className="absolute"
-                    style={{
-                      top: -18,
-                      left: "50%",
-                      width: 130,
-                      height: 36,
-                      transform: "translateX(-50%) rotate(-4deg)",
-                      background: "rgba(255, 235, 120, 0.85)",
-                      border: "2px solid rgba(0,0,0,0.15)",
-                      boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
-                      zIndex: 4,
-                    }}
-                  />
-
-                  {/* 512×512 badge */}
-                  <div
-                    className="absolute"
-                    style={{
-                      top: 14,
-                      left: 14,
-                      background: "#fff",
-                      border: "2.5px solid var(--ink)",
-                      borderRadius: 10,
-                      padding: "4px 9px",
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      boxShadow: SHADOW_2,
-                    }}
-                  >
+                  <div aria-hidden className="absolute" style={{ top: -18, left: "50%", width: 130, height: 36, transform: "translateX(-50%) rotate(-4deg)", background: "rgba(255, 235, 120, 0.85)", border: "2px solid rgba(0,0,0,0.15)", boxShadow: "0 4px 10px rgba(0,0,0,0.1)", zIndex: 4 }} />
+                  <div className="absolute" style={{ top: 14, left: 14, background: "#fff", border: "2.5px solid var(--ink)", borderRadius: 10, padding: "4px 9px", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, boxShadow: SHADOW_2 }}>
                     512×512
                   </div>
-
-                  {/* Maximize / zoom button */}
                   <button
                     onClick={() => setZoomed(true)}
                     aria-label="הגדל תצוגה"
                     className="press-active absolute grid h-[38px] w-[38px] place-items-center"
-                    style={{
-                      top: 14,
-                      right: 14,
-                      background: "#fff",
-                      border: "2.5px solid var(--ink)",
-                      borderRadius: 12,
-                      boxShadow: SHADOW_2,
-                    }}
+                    style={{ top: 14, right: 14, background: "#fff", border: "2.5px solid var(--ink)", borderRadius: 12, boxShadow: SHADOW_2 }}
                   >
                     <Maximize2 size={16} />
                   </button>
-
-                  {/* Recenter selected layer button */}
-                  {selected &&
-                    (selected.offsetX !== 0 || selected.offsetY !== 0) && (
-                      <button
-                        onClick={() =>
-                          patchSelected({ offsetX: 0, offsetY: 0 })
-                        }
-                        aria-label="מרכז את השכבה הנבחרת"
-                        className="press-active absolute flex items-center gap-1.5 px-3 text-xs font-extrabold"
-                        style={{
-                          bottom: 14,
-                          right: 14,
-                          height: 36,
-                          background: "#fff",
-                          border: "2.5px solid var(--ink)",
-                          borderRadius: 12,
-                          boxShadow: SHADOW_2,
-                        }}
-                      >
-                        🎯 <span>מרכז נבחר</span>
-                      </button>
-                    )}
+                  {selected && (selected.offsetX !== 0 || selected.offsetY !== 0) && (
+                    <button
+                      onClick={() => patchSelected({ offsetX: 0, offsetY: 0 })}
+                      aria-label="מרכז את השכבה הנבחרת"
+                      className="press-active absolute flex items-center gap-1.5 px-3 text-xs font-extrabold"
+                      style={{ bottom: 14, right: 14, height: 36, background: "#fff", border: "2.5px solid var(--ink)", borderRadius: 12, boxShadow: SHADOW_2 }}
+                    >
+                      🎯 <span>מרכז נבחר</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* CANVAS HINT */}
-            <div
-              className="flex items-center justify-center gap-2 text-[13px] font-bold"
-              style={{ color: "#5a4252" }}
-            >
+            <div className="flex items-center justify-center gap-2 text-[13px] font-bold" style={{ color: "#5a4252" }}>
               <Hand size={14} /> גרור כל אובייקט · ↕ שנה סדר · ✕ מחק
             </div>
 
             {/* CONTROLS STRIP */}
-            <div
-              className="grid items-center gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4"
-              style={{
-                background: "#fff",
-                border: "3px solid var(--ink)",
-                borderRadius: 22,
-                boxShadow: SHADOW_4,
-              }}
-            >
+            <div className="grid items-center gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4" style={{ background: "#fff", border: "3px solid var(--ink)", borderRadius: 22, boxShadow: SHADOW_4 }}>
               {selected ? (
                 <>
                   <RangeRow
                     icon={<Ruler size={13} />}
-                    label={
-                      selected.type === "word"
-                        ? "גודל המילה"
-                        : selected.type === "image"
-                          ? "גודל התמונה"
-                          : "גודל אימוג'י"
-                    }
+                    label={selected.type === "word" ? "גודל המילה" : selected.type === "image" ? "גודל התמונה" : "גודל אימוג'י"}
                     value={selected.size}
                     onChange={(v) => patchSelected({ size: v })}
                     min={sizeSliderMin}
@@ -1115,13 +1509,7 @@ export default function TemplatesPage() {
                   />
                   <RangeRow
                     icon={<RotateCw size={13} />}
-                    label={
-                      selected.type === "word"
-                        ? "זווית המילה"
-                        : selected.type === "image"
-                          ? "זווית התמונה"
-                          : "זווית אימוג'י"
-                    }
+                    label={selected.type === "word" ? "זווית המילה" : selected.type === "image" ? "זווית התמונה" : "זווית אימוג'י"}
                     value={selected.rotation}
                     onChange={(v) => patchSelected({ rotation: v })}
                     min={rotSliderMin}
@@ -1130,133 +1518,71 @@ export default function TemplatesPage() {
                   />
                 </>
               ) : (
-                <div className="col-span-full text-center text-sm font-bold opacity-60">
-                  בחר שכבה כדי לערוך גודל וזווית
-                </div>
+                <div className="col-span-full text-center text-sm font-bold opacity-60">בחר שכבה כדי לערוך גודל וזווית</div>
               )}
-
               <ChipsRow>
-                <ActionChip
-                  icon={<ImageIcon size={13} />}
-                  label="העלאה"
-                  onClick={openImagePicker}
-                />
-                <ActionChip
-                  icon={<Camera size={13} />}
-                  label="צלם"
-                  onClick={openImagePicker}
-                />
+                <ActionChip icon={<ImageIcon size={13} />} label="העלאה" onClick={openImagePicker} />
+                <ActionChip icon={<Camera size={13} />} label="צלם" onClick={openImagePicker} />
               </ChipsRow>
               <ChipsRow>
-                <ActionChip
-                  icon={<Smile size={13} />}
-                  label="אימוג׳י"
-                  onClick={() => {
-                    const sec = document.getElementById("emoji-picker-section");
-                    sec?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    setOpenEmojiCat((prev) => prev ?? "faces");
-                  }}
-                />
+                <ActionChip icon={<Smile size={13} />} label="אימוג׳י" onClick={() => {
+                  const sec = document.getElementById("emoji-picker-section");
+                  sec?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  setOpenEmojiCat((prev) => prev ?? "faces");
+                }} />
                 <ActionChip
                   icon={<Sparkles size={13} />}
                   label={isRemovingBg ? "מסיר..." : "הסר רקע"}
-                  // Enabled if there's ANY image layer in the stack — the
-                  // handler falls back to the topmost image when nothing
-                  // is currently selected, so we shouldn't gate on the
-                  // user remembering to click the layer first.
                   disabled={!layers.some((l) => l.type === "image") || isRemovingBg}
                   onClick={removeBackgroundFromSelected}
                 />
               </ChipsRow>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleImageFile}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageFile} className="hidden" />
             </div>
 
             {/* PRESETS RAIL */}
             <div>
-              <div
-                className="mb-2.5 flex items-center gap-2 px-1 text-[14px] font-extrabold"
-                style={{ letterSpacing: "-0.01em" }}
-              >
+              <div className="mb-2.5 flex items-center gap-2 px-1 text-[14px] font-extrabold" style={{ letterSpacing: "-0.01em" }}>
                 <Sparkles size={16} />
                 מילים מוכנות
-                <span className="text-xs font-bold" style={{ color: "#5a4252" }}>
-                  · הקלק להעתקה לקנבס
-                </span>
+                <span className="text-xs font-bold" style={{ color: "#5a4252" }}>· הקלק להעתקה לקנבס</span>
               </div>
-              {/* Horizontal rail. Wrapping in a relative container with a
-                  fade gradient on the trailing edge gives users a visual
-                  hint that there's more content. We also keep a thin native
-                  scrollbar — invisible scrollbars made the rail look like a
-                  cropped row instead of a scrollable carousel. */}
               <div className="relative">
-                <div
-                  className="templates-rail flex gap-3 overflow-x-auto pb-3 pt-1"
-                  style={{ scrollbarColor: "var(--ink) transparent" }}
-                >
+                <div className="templates-rail flex gap-3 overflow-x-auto pb-3 pt-1" style={{ scrollbarColor: "var(--ink) transparent" }}>
                   {TEMPLATES.map((t, i) => {
-                  const tilt = ((i % 3) - 1) * 2.5;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => applyTemplate(t)}
-                      className="grid flex-none place-items-center transition-transform"
-                      style={{
-                        width: 116,
-                        height: 116,
-                        background: "#fff",
-                        border: "3px solid var(--ink)",
-                        borderRadius: 22,
-                        boxShadow: SHADOW_4,
-                        transform: `rotate(${tilt}deg)`,
-                        fontFamily: fontStack(t.font),
-                        fontSize: 24,
-                        fontWeight: 800,
-                        color: "var(--ink)",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.transform = `rotate(${tilt}deg) translate(-2px, -2px)`)
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.transform = `rotate(${tilt}deg)`)
-                      }
-                    >
-                      {t.text}
-                    </button>
-                  );
-                })}
+                    const tilt = ((i % 3) - 1) * 2.5;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => applyTemplate(t)}
+                        className="grid flex-none place-items-center transition-transform"
+                        style={{
+                          width: 116,
+                          height: 116,
+                          background: "#fff",
+                          border: "3px solid var(--ink)",
+                          borderRadius: 22,
+                          boxShadow: SHADOW_4,
+                          transform: `rotate(${tilt}deg)`,
+                          fontFamily: fontStack(t.font),
+                          fontSize: 24,
+                          fontWeight: 800,
+                          color: "var(--ink)",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.transform = `rotate(${tilt}deg) translate(-2px, -2px)`)}
+                        onMouseLeave={(e) => (e.currentTarget.style.transform = `rotate(${tilt}deg)`)}
+                      >
+                        {t.text}
+                      </button>
+                    );
+                  })}
                 </div>
-                {/* Fade gradient on the leading edge (LTR-right / RTL-left
-                    after dir=rtl flip) — subtle visual cue that the rail
-                    extends past the visible area. pointer-events-none keeps
-                    cards under it clickable. */}
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute bottom-0 top-0 w-12"
-                  style={{
-                    insetInlineStart: 0,
-                    background:
-                      "linear-gradient(to left, transparent, var(--cream) 80%)",
-                  }}
-                />
+                <div aria-hidden className="pointer-events-none absolute bottom-0 top-0 w-12" style={{ insetInlineStart: 0, background: "linear-gradient(to left, transparent, var(--cream) 80%)" }} />
               </div>
             </div>
 
             {notice && (
-              <div
-                className="rounded-2xl px-4 py-3 text-right text-xs font-bold"
-                style={{
-                  background: "var(--paper)",
-                  border: "2.5px dashed var(--ink)",
-                  color: "var(--ink)",
-                }}
-              >
+              <div className="rounded-2xl px-4 py-3 text-right text-xs font-bold" style={{ background: "var(--paper)", border: "2.5px dashed var(--ink)", color: "var(--ink)" }}>
                 {notice}
               </div>
             )}
@@ -1265,58 +1591,28 @@ export default function TemplatesPage() {
           {/* RIGHT COLUMN — control panel */}
           <aside
             className="flex flex-col gap-4 self-start p-5 lg:sticky lg:top-6"
-            style={{
-              background: "#fff",
-              border: "3px solid var(--ink)",
-              borderRadius: 28,
-              boxShadow: HARD_SHADOW,
-            }}
+            style={{ background: "#fff", border: "3px solid var(--ink)", borderRadius: 28, boxShadow: HARD_SHADOW }}
           >
-            {/* TEXT INPUT — only when a word is selected */}
             {selectedWord && (
               <Section icon={<Pencil size={14} />} label="כתוב">
-                <div
-                  className="px-4 py-3.5"
-                  style={{
-                    background: "var(--cream)",
-                    border: "2.5px solid var(--ink)",
-                    borderRadius: 18,
-                    boxShadow: "inset 0 -3px 0 rgba(0,0,0,0.06)",
-                  }}
-                >
+                <div className="px-4 py-3.5" style={{ background: "var(--cream)", border: "2.5px solid var(--ink)", borderRadius: 18, boxShadow: "inset 0 -3px 0 rgba(0,0,0,0.06)" }}>
                   <input
                     dir="rtl"
                     value={selectedWord.text}
                     maxLength={30}
-                    onChange={(e) =>
-                      patchSelected({ text: e.target.value })
-                    }
+                    onChange={(e) => patchSelected({ text: e.target.value })}
                     placeholder="כתוב מילה..."
                     className="w-full bg-transparent text-right outline-none"
-                    style={{
-                      fontFamily: fontStack(selectedWord.font),
-                      fontSize: 26,
-                      fontWeight: 800,
-                      color: "var(--ink)",
-                      lineHeight: 1.2,
-                    }}
+                    style={{ fontFamily: fontStack(selectedWord.font), fontSize: 26, fontWeight: 800, color: "var(--ink)", lineHeight: 1.2 }}
                   />
                 </div>
-                <div
-                  className="mt-1.5 flex justify-between"
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11,
-                    color: "#5a4252",
-                  }}
-                >
+                <div className="mt-1.5 flex justify-between" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#5a4252" }}>
                   <span>{selectedWord.text.length}/30</span>
                   <span>שכבה {layers.indexOf(selectedWord) + 1} · word</span>
                 </div>
               </Section>
             )}
 
-            {/* FONT — word only */}
             {selectedWord && (
               <Section icon={<TypeIcon size={14} />} label="פונט">
                 <div className="grid grid-cols-3 gap-2">
@@ -1336,22 +1632,8 @@ export default function TemplatesPage() {
                           transform: active ? "translate(2px, 2px)" : "none",
                         }}
                       >
-                        <div
-                          style={{
-                            ...fontButtonStyle[f.id],
-                            fontSize: 22,
-                            fontWeight: 800,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {f.sample}
-                        </div>
-                        <div
-                          className="mt-1 text-[10px] font-extrabold"
-                          style={{ color: active ? "#fff" : "var(--ink)" }}
-                        >
-                          {f.label}
-                        </div>
+                        <div style={{ ...fontButtonStyle[f.id], fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{f.sample}</div>
+                        <div className="mt-1 text-[10px] font-extrabold" style={{ color: active ? "#fff" : "var(--ink)" }}>{f.label}</div>
                       </button>
                     );
                   })}
@@ -1359,15 +1641,12 @@ export default function TemplatesPage() {
               </Section>
             )}
 
-            {/* COLOR — word only */}
             {selectedWord && (
               <Section icon={<Palette size={14} />} label="צבע">
                 <div className="grid grid-cols-5 gap-1.5">
                   {STYLE_OPTIONS.map((s) => {
                     const active = selectedWord.style === s.id;
-                    const lightSwatch = ["classic", "pastel", "neon"].includes(
-                      s.id,
-                    );
+                    const lightSwatch = ["classic", "pastel", "neon"].includes(s.id);
                     return (
                       <button
                         key={s.id}
@@ -1390,10 +1669,7 @@ export default function TemplatesPage() {
                         }}
                       >
                         {active && (
-                          <span
-                            className="absolute inset-0 grid place-items-center"
-                            style={{ color: lightSwatch ? "#000" : "#fff" }}
-                          >
+                          <span className="absolute inset-0 grid place-items-center" style={{ color: lightSwatch ? "#000" : "#fff" }}>
                             <Check size={14} strokeWidth={3} />
                           </span>
                         )}
@@ -1401,14 +1677,8 @@ export default function TemplatesPage() {
                     );
                   })}
                 </div>
-                {/* alignment under colors so words stay grouped */}
                 <div className="mt-3.5">
-                  <div
-                    className="mb-1.5 text-[11px] font-extrabold uppercase"
-                    style={{ color: "#5a4252", letterSpacing: "0.04em" }}
-                  >
-                    יישור
-                  </div>
+                  <div className="mb-1.5 text-[11px] font-extrabold uppercase" style={{ color: "#5a4252", letterSpacing: "0.04em" }}>יישור</div>
                   <div className="flex justify-end gap-2">
                     {ALIGN_OPTIONS.map((a) => {
                       const active = selectedWord.align === a.id;
@@ -1417,16 +1687,7 @@ export default function TemplatesPage() {
                           key={a.id}
                           onClick={() => patchSelected({ align: a.id })}
                           className="press-active px-4 py-2 text-sm font-extrabold"
-                          style={{
-                            background: active ? "var(--ink)" : "#fff",
-                            color: active ? "#fff" : "var(--ink)",
-                            border: "2.5px solid var(--ink)",
-                            borderRadius: 12,
-                            boxShadow: active ? "none" : SHADOW_2,
-                            transform: active
-                              ? "translate(2px, 2px)"
-                              : "none",
-                          }}
+                          style={{ background: active ? "var(--ink)" : "#fff", color: active ? "#fff" : "var(--ink)", border: "2.5px solid var(--ink)", borderRadius: 12, boxShadow: active ? "none" : SHADOW_2, transform: active ? "translate(2px, 2px)" : "none" }}
                         >
                           {a.label}
                         </button>
@@ -1437,15 +1698,9 @@ export default function TemplatesPage() {
               </Section>
             )}
 
-            {/* SKIN TONE — emoji only when capable */}
             {selectedEmoji && (
-              <Section
-                icon={<span className="text-base leading-none">😀</span>}
-                label="אימוג׳י נבחר"
-              >
-                <div className="mb-2 text-2xl leading-none">
-                  {layerPreview(selectedEmoji)}
-                </div>
+              <Section icon={<span className="text-base leading-none">😀</span>} label="אימוג׳י נבחר">
+                <div className="mb-2 text-2xl leading-none">{layerPreview(selectedEmoji)}</div>
                 {selectedEmojiSupportsSkin ? (
                   <div className="flex flex-wrap items-center gap-2">
                     {SKIN_TONE_OPTIONS.map((opt) => {
@@ -1457,194 +1712,85 @@ export default function TemplatesPage() {
                           title={opt.label}
                           aria-label={opt.label}
                           className="h-7 w-7 rounded-full transition-transform hover:scale-110"
-                          style={{
-                            background: opt.swatch,
-                            border: active
-                              ? "3px solid var(--ink)"
-                              : "1.5px solid var(--ink)",
-                            boxShadow: active
-                              ? "0 0 0 2px #fff, 0 0 0 4px var(--ink)"
-                              : "none",
-                            transform: active ? "scale(1.1)" : "none",
-                          }}
+                          style={{ background: opt.swatch, border: active ? "3px solid var(--ink)" : "1.5px solid var(--ink)", boxShadow: active ? "0 0 0 2px #fff, 0 0 0 4px var(--ink)" : "none", transform: active ? "scale(1.1)" : "none" }}
                         />
                       );
                     })}
                   </div>
                 ) : (
-                  <p className="text-[11px] opacity-60">
-                    לאימוג'י זה אין אפשרות לשנות גוון עור.
-                  </p>
+                  <p className="text-[11px] opacity-60">לאימוג'י זה אין אפשרות לשנות גוון עור.</p>
                 )}
               </Section>
             )}
 
-            {/* IMAGE — bg removal */}
             {selectedImage && (
               <Section icon={<ImageIcon size={14} />} label="תמונה נבחרת">
                 <button
                   onClick={removeBackgroundFromSelected}
                   disabled={isRemovingBg}
                   className="press-active flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-extrabold"
-                  style={{
-                    background: "var(--wa)",
-                    color: "#fff",
-                    border: "2.5px solid var(--ink)",
-                    borderRadius: 14,
-                    boxShadow: SHADOW_4,
-                    opacity: isRemovingBg ? 0.6 : 1,
-                  }}
+                  style={{ background: "var(--wa)", color: "#fff", border: "2.5px solid var(--ink)", borderRadius: 14, boxShadow: SHADOW_4, opacity: isRemovingBg ? 0.6 : 1 }}
                 >
                   <Sparkles size={16} />
                   {isRemovingBg ? "מסיר רקע..." : "הסר רקע אוטומטית"}
                 </button>
-                <p
-                  className="mt-2 text-right text-[10px]"
-                  style={{ color: "#5a4252" }}
-                >
-                  רץ במכשיר שלך — לא בענן
-                </p>
+                <p className="mt-2 text-right text-[10px]" style={{ color: "#5a4252" }}>רץ במכשיר שלך — לא בענן</p>
               </Section>
             )}
 
-            {/* LAYERS */}
             <Section icon={<Layers size={14} />} label={`שכבות (${layers.length})`}>
               <div className="space-y-1.5">
-                {[...layers]
-                  .map((l, idx) => ({ l, idx }))
-                  .reverse()
-                  .map(({ l, idx }) => {
-                    const isSelected = l.id === selectedId;
-                    const atFront = idx === layers.length - 1;
-                    const atBack = idx === 0;
-                    return (
-                      <div
-                        key={l.id}
-                        className="flex items-center gap-1.5 px-2 py-2"
-                        style={{
-                          background: isSelected ? "var(--cream)" : "#fff",
-                          border: `2.5px solid ${isSelected ? "var(--ink)" : "#e0d6c2"}`,
-                          borderRadius: 14,
-                          boxShadow: isSelected ? SHADOW_2 : "none",
-                        }}
-                      >
-                        <MiniBtn
-                          aria-label="מחק שכבה"
-                          onClick={() => deleteLayer(l.id)}
-                        >
-                          <Trash2 size={12} />
-                        </MiniBtn>
-                        <MiniBtn
-                          aria-label="הזז אחורה"
-                          disabled={atBack}
-                          onClick={() => moveLayer(l.id, "back")}
-                        >
-                          <ChevronDown size={12} />
-                        </MiniBtn>
-                        <MiniBtn
-                          aria-label="הבא קדימה"
-                          disabled={atFront}
-                          onClick={() => moveLayer(l.id, "front")}
-                        >
-                          <ChevronUp size={12} />
-                        </MiniBtn>
-                        <button
-                          onClick={() => setSelectedId(l.id)}
-                          className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden px-2 text-right"
-                        >
-                          <span
-                            className="truncate text-sm font-extrabold"
-                            style={
-                              l.type === "word"
-                                ? { fontFamily: fontStack(l.font) }
-                                : undefined
-                            }
-                          >
-                            {layerPreview(l)}
-                          </span>
-                          <span
-                            className="flex-shrink-0 text-[10px] font-extrabold uppercase"
-                            style={{
-                              color: "#5a4252",
-                              letterSpacing: "0.04em",
-                            }}
-                          >
-                            {layerTypeLabel(l)}
-                          </span>
-                        </button>
-                      </div>
-                    );
-                  })}
+                {[...layers].map((l, idx) => ({ l, idx })).reverse().map(({ l, idx }) => {
+                  const isSelected = l.id === selectedId;
+                  const atFront = idx === layers.length - 1;
+                  const atBack = idx === 0;
+                  return (
+                    <div
+                      key={l.id}
+                      className="flex items-center gap-1.5 px-2 py-2"
+                      style={{ background: isSelected ? "var(--cream)" : "#fff", border: `2.5px solid ${isSelected ? "var(--ink)" : "#e0d6c2"}`, borderRadius: 14, boxShadow: isSelected ? SHADOW_2 : "none" }}
+                    >
+                      <MiniBtn aria-label="מחק שכבה" onClick={() => deleteLayer(l.id)}><Trash2 size={12} /></MiniBtn>
+                      <MiniBtn aria-label="הזז אחורה" disabled={atBack} onClick={() => moveLayer(l.id, "back")}><ChevronDown size={12} /></MiniBtn>
+                      <MiniBtn aria-label="הבא קדימה" disabled={atFront} onClick={() => moveLayer(l.id, "front")}><ChevronUp size={12} /></MiniBtn>
+                      <button onClick={() => setSelectedId(l.id)} className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden px-2 text-right">
+                        <span className="truncate text-sm font-extrabold" style={l.type === "word" ? { fontFamily: fontStack(l.font) } : undefined}>{layerPreview(l)}</span>
+                        <span className="flex-shrink-0 text-[10px] font-extrabold uppercase" style={{ color: "#5a4252", letterSpacing: "0.04em" }}>{layerTypeLabel(l)}</span>
+                      </button>
+                    </div>
+                  );
+                })}
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    onClick={addWordLayer}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-extrabold"
-                    style={{
-                      background: "var(--cream)",
-                      border: "2.5px dashed var(--ink)",
-                      borderRadius: 14,
-                      color: "var(--ink)",
-                    }}
-                  >
+                  <button onClick={addWordLayer} className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-extrabold" style={{ background: "var(--cream)", border: "2.5px dashed var(--ink)", borderRadius: 14, color: "var(--ink)" }}>
                     <Plus size={14} /> מילה חדשה
                   </button>
-                  <button
-                    onClick={openImagePicker}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-extrabold"
-                    style={{
-                      background: "var(--cream)",
-                      border: "2.5px dashed var(--ink)",
-                      borderRadius: 14,
-                      color: "var(--ink)",
-                    }}
-                  >
+                  <button onClick={openImagePicker} className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-extrabold" style={{ background: "var(--cream)", border: "2.5px dashed var(--ink)", borderRadius: 14, color: "var(--ink)" }}>
                     <Camera size={14} /> תמונה
                   </button>
                 </div>
               </div>
             </Section>
 
-            {/* EMOJI PICKER — adds new emoji layers */}
-            <Section
-              icon={<Smile size={14} />}
-              label="הוסף אימוג׳י"
-              id="emoji-picker-section"
-            >
+            <Section icon={<Smile size={14} />} label="הוסף אימוג׳י" id="emoji-picker-section">
               <div className="flex flex-wrap justify-end gap-1.5">
                 {EMOJI_CATEGORIES.map((cat) => {
                   const isOpen = openEmojiCat === cat.id;
                   return (
                     <button
                       key={cat.id}
-                      onClick={() =>
-                        setOpenEmojiCat(isOpen ? null : cat.id)
-                      }
+                      onClick={() => setOpenEmojiCat(isOpen ? null : cat.id)}
                       className="press-active flex items-center gap-1 px-2.5 py-1.5 text-xs font-extrabold"
-                      style={{
-                        background: isOpen ? "var(--ink)" : "#fff",
-                        color: isOpen ? "#fff" : "var(--ink)",
-                        border: "2.5px solid var(--ink)",
-                        borderRadius: 12,
-                        boxShadow: isOpen ? "none" : SHADOW_2,
-                        transform: isOpen ? "translate(2px, 2px)" : "none",
-                      }}
+                      style={{ background: isOpen ? "var(--ink)" : "#fff", color: isOpen ? "#fff" : "var(--ink)", border: "2.5px solid var(--ink)", borderRadius: 12, boxShadow: isOpen ? "none" : SHADOW_2, transform: isOpen ? "translate(2px, 2px)" : "none" }}
                     >
-                      <span className="text-base leading-none">
-                        {cat.sample}
-                      </span>
+                      <span className="text-base leading-none">{cat.sample}</span>
                       <span>{cat.label}</span>
                     </button>
                   );
                 })}
               </div>
               {openEmojiCat && (
-                <div
-                  className="mt-3 grid grid-cols-7 gap-1.5 pt-3"
-                  style={{ borderTop: "1.5px dashed var(--ink)" }}
-                >
-                  {EMOJI_CATEGORIES.find(
-                    (c) => c.id === openEmojiCat,
-                  )?.emojis.map((e, i) => (
+                <div className="mt-3 grid grid-cols-7 gap-1.5 pt-3" style={{ borderTop: "1.5px dashed var(--ink)" }}>
+                  {EMOJI_CATEGORIES.find((c) => c.id === openEmojiCat)?.emojis.map((e, i) => (
                     <button
                       key={`${openEmojiCat}-${i}`}
                       onClick={() => addEmojiLayer(e)}
@@ -1656,121 +1802,204 @@ export default function TemplatesPage() {
                 </div>
               )}
             </Section>
+
+            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageFile} className="hidden" />
           </aside>
         </div>
 
-        {/* ZOOM MODAL */}
-        {zoomed && (
-          <div
-            onClick={() => setZoomed(false)}
-            className="fixed inset-0 z-50 grid cursor-zoom-out place-items-center p-4"
-            style={{
-              background: "rgba(15,14,12,0.92)",
-              backdropFilter: "blur(8px)",
-            }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="checker relative cursor-default overflow-hidden"
-              style={{
-                width: "min(90vw, 90vh)",
-                height: "min(90vw, 90vh)",
-                border: "3px solid var(--ink)",
-                borderRadius: 28,
-                boxShadow:
-                  "10px 11px 0 var(--ink), 0 30px 60px rgba(0,0,0,0.5)",
-              }}
-            >
-              <canvas
-                ref={zoomRef}
-                width={512}
-                height={512}
-                className="block h-full w-full"
-              />
-              <button
-                onClick={() => setZoomed(false)}
-                aria-label="סגור"
-                className="press-active absolute grid h-11 w-11 place-items-center"
-                style={{
-                  top: 16,
-                  left: 16,
-                  background: "#fff",
-                  border: "2.5px solid var(--ink)",
-                  borderRadius: 12,
-                  boxShadow: SHADOW_3,
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* POST-ACTION MODAL — instructions for turning the .webp file
-            into an actual WhatsApp sticker, since the platform doesn't
-            expose a "send as sticker" intent on the web. */}
-        {postActionModal && (
-          <PostActionModal
-            kind={postActionModal.kind}
-            missing={
-              postActionModal.kind === "needs-more"
-                ? postActionModal.missing
-                : undefined
-            }
-            onClose={() => setPostActionModal(null)}
-            onDownload={() => {
-              setPostActionModal(null);
-              void onDownload();
-            }}
-          />
-        )}
-
-        {/* PAYWALL MODAL */}
-        {showPaywall && (
-          <PaywallModal onClose={() => setShowPaywall(false)} />
-        )}
-
-        {/* PAYMENT SUCCESS MODAL */}
-        {showPaymentSuccess && (
-          <PaymentSuccessModal onClose={() => setShowPaymentSuccess(false)} />
-        )}
-
-        {/* BG REMOVAL LOADING MODAL */}
-        {bgRemovalStage !== null && (
-          <BgRemovalLoadingModal
-            stage={bgRemovalStage}
-            onCancel={() => {
-              // We can't cancel the WASM process, but we hide the modal.
-              // The process continues in background and will resolve on its own.
-              setBgRemovalStage(null);
-            }}
-          />
-        )}
-
-        <footer
-          className="mt-8 pt-6 text-center text-[11px] font-bold"
-          style={{
-            color: "#5a4252",
-            borderTop: "1.5px dashed var(--ink)",
-          }}
-        >
+        <footer className="mt-8 pt-6 text-center text-[11px] font-bold" style={{ color: "#5a4252", borderTop: "1.5px dashed var(--ink)" }}>
           MadbekaApp.co.il
         </footer>
       </main>
+
+      {/* Mobile footer */}
+      <footer className="relative z-10 lg:hidden mt-2 pb-4 text-center text-[11px] font-bold" style={{ color: "#5a4252" }}>
+        MadbekaApp.co.il
+      </footer>
+
+      {/* ZOOM MODAL */}
+      {zoomed && (
+        <div
+          onClick={() => setZoomed(false)}
+          className="fixed inset-0 z-50 grid cursor-zoom-out place-items-center p-4"
+          style={{ background: "rgba(15,14,12,0.92)", backdropFilter: "blur(8px)" }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="checker relative cursor-default overflow-hidden"
+            style={{ width: "min(90vw, 90vh)", height: "min(90vw, 90vh)", border: "3px solid var(--ink)", borderRadius: 28, boxShadow: "10px 11px 0 var(--ink), 0 30px 60px rgba(0,0,0,0.5)" }}
+          >
+            <canvas ref={zoomRef} width={512} height={512} className="block h-full w-full" />
+            <button
+              onClick={() => setZoomed(false)}
+              aria-label="סגור"
+              className="press-active absolute grid h-11 w-11 place-items-center"
+              style={{ top: 16, left: 16, background: "#fff", border: "2.5px solid var(--ink)", borderRadius: 12, boxShadow: SHADOW_3 }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {postActionModal && (
+        <PostActionModal
+          kind={postActionModal.kind}
+          missing={postActionModal.kind === "needs-more" ? postActionModal.missing : undefined}
+          onClose={() => setPostActionModal(null)}
+          onDownload={() => { setPostActionModal(null); void onDownload(); }}
+        />
+      )}
+
+      {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
+      {showPaymentSuccess && <PaymentSuccessModal onClose={() => setShowPaymentSuccess(false)} />}
+      {bgRemovalStage !== null && (
+        <BgRemovalLoadingModal
+          stage={bgRemovalStage}
+          onCancel={() => setBgRemovalStage(null)}
+        />
+      )}
     </div>
   );
 }
 
-/* ────────────────────────────────────────────────────────────────
-   Platform detection — used by the post-action modal to show
-   iOS-vs-Android-vs-desktop instructions. Browser-only; defaults to
-   "desktop" on the server.
-   ──────────────────────────────────────────────────────────────── */
+/* ─── OptionBtn ─── */
+function OptionBtn({
+  icon,
+  label,
+  active,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="press-active flex flex-col items-center justify-center gap-0.5 flex-shrink-0"
+      style={{
+        width: 56,
+        height: 52,
+        background: active ? "var(--ink)" : "#fff",
+        color: active ? "#fff" : "var(--ink)",
+        border: "2.5px solid var(--ink)",
+        borderRadius: 14,
+        boxShadow: active ? "none" : "2px 3px 0 var(--ink)",
+        transform: active ? "translate(2px, 2px)" : "none",
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {icon}
+      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "-0.02em" }}>{label}</span>
+    </button>
+  );
+}
 
+/* ─── VerticalSliderBlock ─── */
+function VerticalSliderBlock({
+  icon,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center gap-1 flex-1 w-full"
+      style={{
+        background: "#fff",
+        border: "2px solid var(--ink)",
+        borderRadius: 14,
+        padding: "8px 4px",
+        boxShadow: "2px 3px 0 var(--ink)",
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
+      <div style={{ color: "var(--ink)" }}>{icon}</div>
+      <div style={{ fontSize: 9, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.02em" }}>{label}</div>
+      <div className="relative flex-1 w-full flex items-center justify-center" style={{ minHeight: 80 }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          disabled={disabled}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="cursor-pointer"
+          style={{
+            writingMode: "vertical-lr" as React.CSSProperties["writingMode"],
+            direction: "rtl",
+            width: 28,
+            height: 80,
+            appearance: "slider-vertical" as React.CSSProperties["appearance"],
+            WebkitAppearance: "slider-vertical" as React.CSSProperties["WebkitAppearance"],
+            accentColor: "var(--wa)",
+          }}
+        />
+      </div>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: "#5a4252", fontWeight: 700 }}>{value}</div>
+    </div>
+  );
+}
+
+/* ─── BottomPanel ─── */
+function BottomPanel({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  const SHADOW_2 = "2px 3px 0 var(--ink)";
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        background: "#fff",
+        border: "3px solid var(--ink)",
+        borderRadius: 22,
+        boxShadow: "4px 5px 0 var(--ink)",
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={onClose}
+          className="press-active grid h-8 w-8 place-items-center"
+          style={{ background: "var(--cream)", border: "2px solid var(--ink)", borderRadius: 10, boxShadow: SHADOW_2 }}
+          aria-label="סגור"
+        >
+          <X size={14} />
+        </button>
+        <div className="text-sm font-extrabold" style={{ color: "var(--ink)" }}>{title}</div>
+        <div style={{ width: 32 }} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/* ─── Platform detection ─── */
 type Platform = "ios" | "android" | "desktop";
-
 function detectPlatform(): Platform {
   if (typeof navigator === "undefined") return "desktop";
   const ua = navigator.userAgent || "";
@@ -1779,14 +2008,7 @@ function detectPlatform(): Platform {
   return "desktop";
 }
 
-/* ────────────────────────────────────────────────────────────────
-   PostActionModal — shown after share / download.
-   WhatsApp doesn't accept stickers via Web Share, so a .webp file
-   ends up as an image attachment that the user has to convert in
-   the WhatsApp UI. This modal walks them through the steps with
-   platform-specific copy.
-   ──────────────────────────────────────────────────────────────── */
-
+/* ─── PostActionModal ─── */
 function PostActionModal({
   kind,
   missing,
@@ -1794,11 +2016,12 @@ function PostActionModal({
   onDownload,
 }: {
   kind: "shared" | "fallback" | "downloaded" | "added-to-pack" | "needs-more";
-  /** For kind === "needs-more" only — how many stickers the user is short. */
   missing?: number;
   onClose: () => void;
   onDownload: () => void;
 }) {
+  const SHADOW_2 = "2px 3px 0 var(--ink)";
+  const SHADOW_3 = "3px 4px 0 var(--ink)";
   const [platform, setPlatform] = useState<Platform>("desktop");
   useEffect(() => {
     setPlatform(detectPlatform());
@@ -1806,36 +2029,24 @@ function PostActionModal({
 
   const headline = (() => {
     switch (kind) {
-      case "shared":
-        return "המדבקה נשלחה!";
-      case "fallback":
-        return "שולחים מהדסקטופ?";
-      case "downloaded":
-        return "המדבקה נשמרה במכשיר!";
-      case "added-to-pack":
-        return "המדבקה במאגר!";
-      case "needs-more":
-        return "כמעט שם!";
+      case "shared": return "המדבקה נשלחה!";
+      case "fallback": return "שולחים מהדסקטופ?";
+      case "downloaded": return "המדבקה נשמרה במכשיר!";
+      case "added-to-pack": return "המדבקה במאגר!";
+      case "needs-more": return "כמעט שם!";
     }
   })();
 
   const subhead = (() => {
     switch (kind) {
-      case "fallback":
-        return "ל-WhatsApp Web אין אפשרות לשלוח מדבקות ישירות. שני פתרונות:";
-      case "added-to-pack":
-        return "החבילה 'המדבקות שלי' נוספה ל-WhatsApp — תיכנס לכל צ'אט, תלחץ על אייקון המדבקות, והיא שם.";
-      case "needs-more":
-        return `WhatsApp דורש לפחות 3 מדבקות בכל חבילה. תיצור עוד ${missing} ואז תוכל להוסיף הכל בלחיצה אחת.`;
-      default:
-        return "כדי שתופיע כמדבקה (ולא כתמונה רגילה) ב-WhatsApp:";
+      case "fallback": return "ל-WhatsApp Web אין אפשרות לשלוח מדבקות ישירות. שני פתרונות:";
+      case "added-to-pack": return "החבילה 'המדבקות שלי' נוספה ל-WhatsApp — תיכנס לכל צ'אט, תלחץ על אייקון המדבקות, והיא שם.";
+      case "needs-more": return `WhatsApp דורש לפחות 3 מדבקות בכל חבילה. תיצור עוד ${missing} ואז תוכל להוסיף הכל בלחיצה אחת.`;
+      default: return "כדי שתופיע כמדבקה (ולא כתמונה רגילה) ב-WhatsApp:";
     }
   })();
 
-  // Steps depend on both kind + platform.
   const steps: string[] = (() => {
-    // Native happy paths — no instructions needed, the deed is done /
-    // the user just needs to keep creating.
     if (kind === "added-to-pack" || kind === "needs-more") return [];
     if (kind === "fallback") {
       return [
@@ -1849,8 +2060,6 @@ function PostActionModal({
     }
     if (kind === "downloaded") {
       if (platform === "desktop") {
-        // We don't know which mobile OS the user will end up on, so the
-        // last step covers both add-to-stickers vocabularies.
         return [
           "הקובץ נשמר בתיקיית ההורדות.",
           "תעביר אותו למובייל (WhatsApp Web / Drive / מייל לעצמך).",
@@ -1863,12 +2072,9 @@ function PostActionModal({
         "פתח WhatsApp → צ'אט → 📎 → גלריה.",
         "בחר את הקובץ madbeka-sticker.webp ושלח.",
         "לחץ לחיצה ארוכה על המדבקה ששלחת.",
-        platform === "ios"
-          ? "בחר 'הוסף למועדפות'."
-          : "בחר 'הוסף למדבקות'.",
+        platform === "ios" ? "בחר 'הוסף למועדפות'." : "בחר 'הוסף למדבקות'.",
       ];
     }
-    // kind === "shared"
     return [
       "פתח את הצ'אט שאליו שלחת את המדבקה.",
       "לחץ לחיצה ארוכה על המדבקה שקיבלת.",
@@ -1882,10 +2088,7 @@ function PostActionModal({
     <div
       onClick={onClose}
       className="fixed inset-0 z-50 grid place-items-center p-4"
-      style={{
-        background: "rgba(15,14,12,0.55)",
-        backdropFilter: "blur(6px)",
-      }}
+      style={{ background: "rgba(15,14,12,0.55)", backdropFilter: "blur(6px)" }}
       role="dialog"
       aria-modal="true"
       dir="rtl"
@@ -1893,107 +2096,40 @@ function PostActionModal({
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-md p-6 sm:p-7"
-        style={{
-          background: "var(--cream)",
-          border: "3px solid var(--ink)",
-          borderRadius: 26,
-          boxShadow: "10px 11px 0 var(--ink)",
-        }}
+        style={{ background: "var(--cream)", border: "3px solid var(--ink)", borderRadius: 26, boxShadow: "10px 11px 0 var(--ink)" }}
       >
-        {/* Yellow tape strip */}
-        <span
-          aria-hidden
-          className="absolute"
-          style={{
-            top: -14,
-            right: "20%",
-            width: 90,
-            height: 24,
-            transform: "rotate(-6deg)",
-            background: "rgba(255,235,120,0.9)",
-            border: "2px solid rgba(0,0,0,0.15)",
-          }}
-        />
-
+        <span aria-hidden className="absolute" style={{ top: -14, right: "20%", width: 90, height: 24, transform: "rotate(-6deg)", background: "rgba(255,235,120,0.9)", border: "2px solid rgba(0,0,0,0.15)" }} />
         <button
           onClick={onClose}
           aria-label="סגור"
           className="press-active absolute grid h-9 w-9 place-items-center"
-          style={{
-            top: 14,
-            left: 14,
-            background: "#fff",
-            border: "2px solid var(--ink)",
-            borderRadius: 10,
-            boxShadow: "3px 4px 0 var(--ink)",
-          }}
+          style={{ top: 14, left: 14, background: "#fff", border: "2px solid var(--ink)", borderRadius: 10, boxShadow: SHADOW_3 }}
         >
           <X size={16} />
         </button>
-
-        <div
-          className="mb-1 text-right"
-          style={{
-            fontFamily: "'Karantina', 'Heebo', sans-serif",
-            fontWeight: 700,
-            fontSize: 38,
-            lineHeight: 1,
-            letterSpacing: "-0.02em",
-            color: "var(--ink)",
-          }}
-        >
+        <div className="mb-1 text-right" style={{ fontFamily: "'Karantina', 'Heebo', sans-serif", fontWeight: 700, fontSize: 38, lineHeight: 1, letterSpacing: "-0.02em", color: "var(--ink)" }}>
           {headline}
         </div>
-        <div
-          className="mb-5 text-right text-[14px] font-bold"
-          style={{ color: "#5a4252", lineHeight: 1.5 }}
-        >
-          {subhead}
-        </div>
-
+        <div className="mb-5 text-right text-[14px] font-bold" style={{ color: "#5a4252", lineHeight: 1.5 }}>{subhead}</div>
         <ol className="space-y-2.5 text-right">
           {steps.map((step, i) => (
             <li key={i} className="flex items-start gap-3">
               <span
                 className="grid flex-none place-items-center text-[12px] font-extrabold"
-                style={{
-                  width: 26,
-                  height: 26,
-                  background: "var(--wa)",
-                  color: "#fff",
-                  border: "2px solid var(--ink)",
-                  borderRadius: 8,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  marginTop: 1,
-                }}
+                style={{ width: 26, height: 26, background: "var(--wa)", color: "#fff", border: "2px solid var(--ink)", borderRadius: 8, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}
               >
                 {i + 1}
               </span>
-              <span
-                className="text-[14px] font-bold leading-snug"
-                style={{ color: "var(--ink)" }}
-              >
-                {step}
-              </span>
+              <span className="text-[14px] font-bold leading-snug" style={{ color: "var(--ink)" }}>{step}</span>
             </li>
           ))}
         </ol>
-
         <div className="mt-6 flex flex-wrap gap-2.5">
           {kind === "fallback" && (
             <button
               onClick={onDownload}
               className="press-active inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 text-base font-extrabold"
-              style={{
-                background: "var(--wa)",
-                color: "#fff",
-                border: "2.5px solid var(--ink)",
-                borderRadius: 14,
-                boxShadow: "5px 6px 0 var(--ink)",
-                fontFamily: "'Karantina', 'Heebo', sans-serif",
-                fontSize: 22,
-                minWidth: 140,
-              }}
+              style={{ background: "var(--wa)", color: "#fff", border: "2.5px solid var(--ink)", borderRadius: 14, boxShadow: "5px 6px 0 var(--ink)", fontFamily: "'Karantina', 'Heebo', sans-serif", fontSize: 22, minWidth: 140 }}
             >
               <Download size={16} />
               תורד עכשיו
@@ -2002,14 +2138,7 @@ function PostActionModal({
           <button
             onClick={onClose}
             className="press-active inline-flex flex-1 items-center justify-center px-5 py-3 text-sm font-extrabold"
-            style={{
-              background: "#fff",
-              color: "var(--ink)",
-              border: "2.5px solid var(--ink)",
-              borderRadius: 14,
-              boxShadow: "4px 5px 0 var(--ink)",
-              minWidth: 120,
-            }}
+            style={{ background: "#fff", color: "var(--ink)", border: "2.5px solid var(--ink)", borderRadius: 14, boxShadow: "4px 5px 0 var(--ink)", minWidth: 120 }}
           >
             הבנתי
           </button>
@@ -2019,6 +2148,7 @@ function PostActionModal({
   );
 }
 
+/* ─── PlayfulBtn ─── */
 function PlayfulBtn({
   children,
   icon,
@@ -2032,13 +2162,13 @@ function PlayfulBtn({
   return (
     <button
       {...props}
-      className={`press-active inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-extrabold ${props.className ?? ""}`}
+      className={`press-active inline-flex items-center gap-1.5 px-3 py-2 text-sm font-extrabold ${props.className ?? ""}`}
       style={{
         background: isPrimary ? "var(--wa)" : "#fff",
         color: isPrimary ? "#fff" : "var(--ink)",
-        border: "3px solid var(--ink)",
-        borderRadius: 16,
-        boxShadow: "4px 5px 0 var(--ink)",
+        border: "2.5px solid var(--ink)",
+        borderRadius: 14,
+        boxShadow: "3px 4px 0 var(--ink)",
         opacity: props.disabled ? 0.5 : 1,
         cursor: props.disabled ? "not-allowed" : "pointer",
       }}
@@ -2049,19 +2179,17 @@ function PlayfulBtn({
   );
 }
 
-function Chip({
-  children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+/* ─── Chip ─── */
+function Chip({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...props}
-      className="press-active grid h-11 w-11 place-items-center"
+      className="press-active grid h-10 w-10 place-items-center"
       style={{
         background: "#fff",
-        border: "3px solid var(--ink)",
-        borderRadius: 14,
-        boxShadow: "3px 4px 0 var(--ink)",
+        border: "2.5px solid var(--ink)",
+        borderRadius: 12,
+        boxShadow: "2px 3px 0 var(--ink)",
         color: "var(--ink)",
         opacity: props.disabled ? 0.4 : 1,
         cursor: props.disabled ? "not-allowed" : "pointer",
@@ -2072,6 +2200,7 @@ function Chip({
   );
 }
 
+/* ─── ActionChip ─── */
 function ActionChip({
   icon,
   label,
@@ -2093,7 +2222,7 @@ function ActionChip({
         color: "var(--ink)",
         border: "2.5px solid var(--ink)",
         borderRadius: 14,
-        boxShadow: "3px 4px 0 var(--ink)",
+        boxShadow: "2px 3px 0 var(--ink)",
         opacity: disabled ? 0.45 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -2104,51 +2233,35 @@ function ActionChip({
   );
 }
 
+/* ─── ChipsRow ─── */
 function ChipsRow({ children }: { children: React.ReactNode }) {
   return <div className="flex gap-1.5">{children}</div>;
 }
 
-function MiniBtn({
-  children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+/* ─── MiniBtn ─── */
+function MiniBtn({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...props}
       className="grid h-7 w-7 flex-shrink-0 place-items-center transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-      style={{
-        background: "#fff",
-        border: "1.5px solid var(--ink)",
-        borderRadius: 7,
-        color: "var(--ink)",
-      }}
+      style={{ background: "#fff", border: "1.5px solid var(--ink)", borderRadius: 7, color: "var(--ink)" }}
     >
       {children}
     </button>
   );
 }
 
-function Section({
-  icon,
-  label,
-  children,
-  id,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-  id?: string;
-}) {
+/* ─── Section ─── */
+function Section({ icon, label, children, id }: { icon: React.ReactNode; label: string; children: React.ReactNode; id?: string }) {
   return (
     <section id={id}>
-      <div className="mb-2.5 flex items-center gap-1.5 text-[13px] font-extrabold">
-        {icon} {label}
-      </div>
+      <div className="mb-2.5 flex items-center gap-1.5 text-[13px] font-extrabold">{icon} {label}</div>
       {children}
     </section>
   );
 }
 
+/* ─── RangeRow ─── */
 function RangeRow({
   icon,
   label,
@@ -2170,30 +2283,12 @@ function RangeRow({
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between text-xs font-extrabold">
-        <span className="inline-flex items-center gap-1">
-          {icon} {label}
-        </span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          {value}
-          {unit}
-        </span>
+        <span className="inline-flex items-center gap-1">{icon} {label}</span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{value}{unit}</span>
       </div>
       <div className="relative h-3">
-        <div
-          className="absolute inset-x-0 top-1 h-1 rounded-full"
-          style={{
-            background: "var(--cream)",
-            border: "1.5px solid var(--ink)",
-          }}
-        />
-        <div
-          className="absolute top-1 h-1 rounded-full"
-          style={{
-            insetInlineStart: 0,
-            width: `${pct}%`,
-            background: "var(--wa)",
-          }}
-        />
+        <div className="absolute inset-x-0 top-1 h-1 rounded-full" style={{ background: "var(--cream)", border: "1.5px solid var(--ink)" }} />
+        <div className="absolute top-1 h-1 rounded-full" style={{ insetInlineStart: 0, width: `${pct}%`, background: "var(--wa)" }} />
         <input
           type="range"
           min={min}
@@ -2205,22 +2300,9 @@ function RangeRow({
         />
         <div
           className="pointer-events-none absolute h-4 w-4 rounded-full"
-          style={{
-            insetInlineStart: `calc(${pct}% - 8px)`,
-            top: -1,
-            background: "#fff",
-            border: "2.5px solid var(--ink)",
-          }}
+          style={{ insetInlineStart: `calc(${pct}% - 8px)`, top: -1, background: "#fff", border: "2.5px solid var(--ink)" }}
         />
       </div>
     </div>
   );
-}
-
-// Hide horizontal scrollbar inside the presets rail.
-// (Inline because Tailwind v4 doesn't ship a built-in `no-scrollbar`.)
-declare module "react" {
-  interface CSSProperties {
-    [key: `--${string}`]: string | number | undefined;
-  }
 }

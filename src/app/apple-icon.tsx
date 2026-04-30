@@ -2,19 +2,18 @@ import { ImageResponse } from "next/og";
 import { LOGO_TEXT, LogoImageJSX, loadGoogleFont } from "@/lib/logo-image";
 
 /**
- * Apple Touch Icon — used when an iOS user adds the site to their home
- * screen. iOS does not apply a mask, so we can use the "any" purpose
- * padding and let the full wordmark breathe edge-to-edge.
+ * Apple Touch Icon — 180×180, used when an iOS user adds the site to home screen.
+ * Renders the Madbeka brand mark (black tile + white "מ" + green underglow + yellow ✦).
  */
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
 export default async function AppleIcon() {
-  const fontData = await loadGoogleFont("Permanent+Marker", LOGO_TEXT);
+  const fontData = await loadGoogleFont("Heebo:wght@900", LOGO_TEXT);
   return new ImageResponse(<LogoImageJSX size={180} paddingRatio={0.08} />, {
     ...size,
     fonts: [
-      { name: "Permanent Marker", data: fontData, style: "normal", weight: 400 },
+      { name: "Heebo", data: fontData, style: "normal", weight: 900 },
     ],
   });
 }

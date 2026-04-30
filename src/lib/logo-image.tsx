@@ -1,27 +1,23 @@
 /**
  * Shared logo renderer for Next.js icon generation (favicon, apple-icon,
- * PWA manifest icons). Renders the brand mark in Permanent Marker — a
- * thick graffiti / marker-pen Google Font that reads as a hand-applied
- * sticker, matching the Madbeka voice.
+ * PWA manifest icons).
+ *
+ * Renders the Madbeka brand mark:
+ *   - Black square (#0E0E0E) with rounded corners (22% of size)
+ *   - White Heebo 900 "מ" centered, font-size ~60% of size
+ *   - Green (#22C55E) shadow block behind-and-below the tile (underglow)
+ *   - Yellow (#FACC15) ✦ star in the top-left corner
  *
  * Font is fetched at generation time since `next/og` ImageResponse does not
  * have access to the browser font cache or CSS @font-face rules.
  */
 
-/**
- * Fetch a Google Font's binary TTF data for use inside `next/og`
- * ImageResponse. Passing `text` to the CSS endpoint returns a subset TTF
- * containing only the glyphs we need — keeps the fetch tiny.
- */
 export async function loadGoogleFont(
   family: string,
   text: string,
 ): Promise<ArrayBuffer> {
-  const url = `https://fonts.googleapis.com/css2?family=${family}&text=${encodeURIComponent(
-    text,
-  )}`;
+  const url = `https://fonts.googleapis.com/css2?family=${family}&text=${encodeURIComponent(text)}`;
   const cssRes = await fetch(url, {
-    // Spoof a modern UA so Google serves woff2/truetype CSS we can parse
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -38,13 +34,11 @@ export async function loadGoogleFont(
 }
 
 /**
- * JSX block for the Madbeka brush wordmark. Reusable across every icon
- * surface (favicon, apple-icon, manifest icons).
+ * Brand mark JSX for next/og ImageResponse.
  *
- * `padding` is a fraction of `size`:
- *  - "any" purpose icons: ~0.08 (subject fills the tile edge-to-edge)
- *  - "maskable" icons: ~0.18 (subject stays inside Android's 80% safe zone
- *    so rounded / squircle / teardrop masks don't crop the text)
+ * paddingRatio:
+ *  - "any" purpose: 0.08  → content fills tile edge-to-edge
+ *  - "maskable":    0.18  → safe zone for Android's squircle/circle mask
  */
 export function LogoImageJSX({
   size,
@@ -53,66 +47,90 @@ export function LogoImageJSX({
   size: number;
   paddingRatio?: number;
 }) {
-  const pad = size * paddingRatio;
-  const availableSide = size * (1 - 2 * paddingRatio);
-
-  // Vertical layout: bold "M" on top, "Madbeka" wordmark below.
-  // Permanent Marker is narrower than Rubik Wet Paint was, so we can push
-  // the M a touch larger without clipping at the tile edges.
-  //
-  // height budget inside the tile:
-  //   M letter   : 0.70
-  //   gap        : 0.04
-  //   wordmark   : 0.16
-  //   slack      : 0.10  (breathing room top + bottom)
-  const mFontSize = availableSide * 0.70;
-  const wordFontSize = availableSide * 0.16;
-  const gap = availableSide * 0.04;
+  const pad = Math.round(size * paddingRatio);
+  const tileSize = size - pad * 2;
+  const radius = Math.round(tileSize * 0.22);
+  const glowOffset = Math.round(tileSize * 0.09);
+  const mFontSize = Math.round(tileSize * 0.60);
+  const starSize = Math.round(tileSize * 0.28);
+  const starOffset = Math.round(tileSize * 0.06);
 
   return (
+    // Outer wrapper — full icon square, white background so the star/glow
+    // sit on a neutral field. The tile is positioned absolutely inside.
     <div
       style={{
         width: size,
         height: size,
         background: "#ffffff",
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: pad,
-        gap,
+        position: "relative",
       }}
     >
+      {/* Green underglow — offset square behind-and-below the black tile */}
       <div
         style={{
+          position: "absolute",
+          width: tileSize,
+          height: tileSize,
+          borderRadius: radius,
+          background: "#22C55E",
+          left: pad + glowOffset,
+          top: pad + glowOffset,
+        }}
+      />
+
+      {/* Black tile */}
+      <div
+        style={{
+          position: "absolute",
+          width: tileSize,
+          height: tileSize,
+          borderRadius: radius,
+          background: "#0E0E0E",
+          left: pad,
+          top: pad,
           display: "flex",
-          fontFamily: "Permanent Marker",
-          fontSize: mFontSize,
-          color: "#000000",
-          lineHeight: 1,
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        M
+        {/* White "מ" — Heebo 900 */}
+        <div
+          style={{
+            fontFamily: "Heebo",
+            fontWeight: 900,
+            fontSize: mFontSize,
+            color: "#FFFFFF",
+            lineHeight: 1,
+            display: "flex",
+          }}
+        >
+          {"מ"}
+        </div>
       </div>
+
+      {/* Yellow ✦ star — top-left corner, overlapping the tile edge */}
       <div
         style={{
-          display: "flex",
-          fontFamily: "Permanent Marker",
-          fontSize: wordFontSize,
-          color: "#000000",
+          position: "absolute",
+          left: pad - starOffset,
+          top: pad - starOffset,
+          fontSize: starSize,
+          color: "#FACC15",
           lineHeight: 1,
-          letterSpacing: "-0.01em",
-          whiteSpace: "nowrap",
+          display: "flex",
         }}
       >
-        Madbeka
+        ✦
       </div>
     </div>
   );
 }
 
-// Subset text passed to the Google Font endpoint — needs to cover every
-// glyph we render (M + a/d/b/e/k from "Madbeka"). Listing the full word is
-// the simplest way to guarantee the subset is complete.
-export const LOGO_TEXT = "Madbeka";
+// Subset text: Hebrew mem + star glyph for the Google Font endpoint.
+// Heebo needs just the "מ" glyph — include a few Latin chars as fallback.
+export const LOGO_TEXT = "מ";
 export const FULL_WORDMARK = "Madbeka";

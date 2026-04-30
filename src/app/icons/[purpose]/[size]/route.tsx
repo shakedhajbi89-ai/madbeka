@@ -9,21 +9,14 @@ import { LOGO_TEXT, LogoImageJSX, loadGoogleFont } from "@/lib/logo-image";
  *   purpose ∈ { "any", "maskable" }
  *   size    ∈ { 192, 512 }
  *
- * Using a single route keeps the four-icon matrix declarative in
- * `manifest.ts` without committing four binary PNG files to the repo.
- *
- * Android applies one of several mask shapes (squircle, circle, teardrop)
- * to "maskable" icons and crops anything outside an inner ~80% circle — so
- * the maskable variant uses extra padding to keep the wordmark intact
- * after masking.
+ * Renders the Madbeka brand mark: black tile + white "מ" + green underglow +
+ * yellow ✦ star. Uses Heebo 900 for the Hebrew glyph.
  */
 
 const ALLOWED_SIZES = [192, 512] as const;
 const ALLOWED_PURPOSES = ["any", "maskable"] as const;
 type Purpose = (typeof ALLOWED_PURPOSES)[number];
 
-// Cache the generated PNGs at the edge for a day — the icon is static and
-// the Google Font fetch on cold start is the slow part.
 export const revalidate = 86400;
 
 export async function GET(
@@ -40,12 +33,12 @@ export async function GET(
     return new Response("unsupported purpose", { status: 404 });
   }
 
-  // Maskable needs a bigger safe zone so Android's mask doesn't crop the
-  // wordmark's tails/underline flourish.
+  // Maskable needs extra safe zone for Android's mask shapes.
   const paddingRatio = purpose === "maskable" ? 0.18 : 0.08;
 
   try {
-    const fontData = await loadGoogleFont("Permanent+Marker", LOGO_TEXT);
+    // Heebo for the "מ" glyph — subset to just the chars we render.
+    const fontData = await loadGoogleFont("Heebo:wght@900", LOGO_TEXT);
 
     return new ImageResponse(
       <LogoImageJSX size={size} paddingRatio={paddingRatio} />,
@@ -54,18 +47,15 @@ export async function GET(
         height: size,
         fonts: [
           {
-            name: "Permanent Marker",
+            name: "Heebo",
             data: fontData,
             style: "normal",
-            weight: 400,
+            weight: 900,
           },
         ],
       },
     );
   } catch (err) {
-    // Rare — would usually mean Google Fonts CSS endpoint changed shape or
-    // the edge runtime couldn't reach fonts.gstatic.com. We'd rather a
-    // missing icon than a hung request (PWA install will retry).
     console.error("icon generation failed", { purpose, size, err });
     return new Response("icon generation failed", { status: 500 });
   }
