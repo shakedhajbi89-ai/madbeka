@@ -28,11 +28,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Node.js 20 ──────────────────────────────────────────────────────
-      - name: Setup Node.js 20
+      # ── 2. Node.js 22 ──────────────────────────────────────────────────────
+      # Capacitor 8 CLI requires Node.js >= 22.0.0
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       # ── 3. Java 21 ─────────────────────────────────────────────────────────
