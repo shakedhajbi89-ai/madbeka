@@ -2,131 +2,22 @@ import Link from "next/link";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import {
-  ArrowLeft,
-  Camera,
-  CheckCircle2,
-  Hand,
-  ImageIcon,
+  Check,
+  FileText,
+  Play,
   Send,
+  Shield,
   Sparkles,
+  TrendingUp,
+  Type,
   Wand2,
 } from "lucide-react";
 import { StickerMaker } from "@/components/sticker-maker";
-import { StickerCounter } from "@/components/sticker-counter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { BrutalButton } from "@/components/BrutalButton";
-import { PUBLIC_DOMAIN } from "@/lib/brand";
-
-/* ─────────────────────────────────────────────────────────────
-   Sample sticker — uses CSS to fake the same `paint-order: stroke fill`
-   recipe the real canvas renders. Used decoratively on the hero so
-   visitors instantly grok what the product produces.
-   ───────────────────────────────────────────────────────────── */
-function HeroSticker({
-  text,
-  fill,
-  stroke,
-  rotate,
-  size = 76,
-  className,
-}: {
-  text: string;
-  fill: string;
-  stroke: string;
-  rotate: number;
-  size?: number;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`pointer-events-none absolute select-none ${className ?? ""}`}
-      style={{ transform: `rotate(${rotate}deg)` }}
-      aria-hidden
-    >
-      <div
-        style={{
-          background: "#fff",
-          border: "3px solid var(--ink)",
-          borderRadius: 22,
-          padding: "12px 22px",
-          boxShadow: "7px 9px 0 var(--ink)",
-        }}
-      >
-        <span
-          style={{
-            fontFamily: "'Karantina', 'Heebo', sans-serif",
-            fontWeight: 700,
-            fontSize: size,
-            color: fill,
-            WebkitTextStroke: `4px ${stroke}`,
-            paintOrder: "stroke fill",
-            textShadow: `0 5px 0 ${stroke}`,
-            letterSpacing: "-0.02em",
-            lineHeight: 1,
-          }}
-        >
-          {text}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* Reusable section heading — paper kicker pill + Karantina title. */
-function SectionHeading({
-  kicker,
-  title,
-  subtitle,
-}: {
-  kicker?: string;
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="mb-8 text-center">
-      {kicker && (
-        <div
-          className="mb-3 inline-block px-3 py-1"
-          style={{
-            background: "var(--paper)",
-            border: "2px solid var(--ink)",
-            borderRadius: 100,
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 11,
-            fontWeight: 700,
-            color: "var(--ink)",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            boxShadow: "2px 3px 0 var(--ink)",
-          }}
-        >
-          {kicker}
-        </div>
-      )}
-      <h2
-        style={{
-          fontFamily: "'Karantina', 'Heebo', sans-serif",
-          fontWeight: 700,
-          fontSize: 48,
-          lineHeight: 1.05,
-          letterSpacing: "-0.015em",
-          color: "var(--ink)",
-        }}
-      >
-        {title}
-      </h2>
-      {subtitle && (
-        <p
-          className="mx-auto mt-3 max-w-2xl text-base"
-          style={{ color: "var(--ink)", opacity: 0.7 }}
-        >
-          {subtitle}
-        </p>
-      )}
-    </div>
-  );
-}
+import { StickerTile } from "@/components/StickerTile";
+import { Eyebrow, YellowTape } from "@/components/Decorative";
 
 export default async function Home() {
   const { userId } = await auth();
@@ -136,15 +27,14 @@ export default async function Home() {
     <UserButton />
   ) : (
     <SignInButton mode="modal">
-      <button className="text-sm font-extrabold text-[var(--ink)]">התחברות</button>
+      <button className="text-sm font-extrabold text-[var(--ink)]">
+        התחברות
+      </button>
     </SignInButton>
   );
 
   return (
-    <div
-      className="relative min-h-screen text-ink"
-      style={{ background: "var(--cream)" }}
-    >
+    <div className="relative min-h-screen text-ink" style={{ background: "var(--cream)" }}>
       {/* ── Sticky Header ── */}
       <Header variant="full" authControls={authControls} />
 
@@ -171,241 +61,196 @@ export default async function Home() {
       </svg>
 
       <main dir="rtl">
-      <div className="relative z-10 mx-auto max-w-6xl px-6 py-6 lg:px-8">
-
         {/* ───────── HERO ───────── */}
-        <section className="relative pb-16 pt-6 text-center">
-          {/* floating sample stickers — visible on lg+ only */}
-          <div className="hidden lg:block">
-            <HeroSticker
-              text="יאללה"
-              fill="#25D366"
-              stroke="#06352b"
-              rotate={-8}
-              size={68}
-              className="left-2 top-12"
-            />
-            <HeroSticker
-              text="חחחח"
-              fill="#FF6EB5"
-              stroke="#5b1b73"
-              rotate={6}
-              size={64}
-              className="right-4 top-20"
-            />
-            <HeroSticker
-              text="סבבה"
-              fill="#F4C430"
-              stroke="#0F0E0C"
-              rotate={-4}
-              size={56}
-              className="bottom-12 left-12"
-            />
-            <HeroSticker
-              text="אחי"
-              fill="#7C3AED"
-              stroke="#1a063b"
-              rotate={10}
-              size={60}
-              className="bottom-8 right-16"
-            />
-          </div>
+        <section className="glow-bg relative pt-12 pb-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
 
-          <div className="relative">
-            <StickerCounter />
-            <h1
-              className="mx-auto mt-5 max-w-3xl"
-              style={{
-                fontFamily: "'Karantina', 'Heebo', sans-serif",
-                fontWeight: 700,
-                fontSize: "clamp(56px, 9vw, 110px)",
-                lineHeight: 0.92,
-                letterSpacing: "-0.025em",
-                color: "var(--ink)",
-              }}
-            >
-              מדבקות וואטסאפ{" "}
-              <span
-                className="inline-block"
-                style={{
-                  color: "var(--wa)",
-                  WebkitTextStroke: "5px var(--ink)",
-                  paintOrder: "stroke fill",
-                  textShadow: "0 7px 0 var(--ink)",
-                }}
-              >
-                בעברית
-              </span>
-              ,
-              <br />
-              תוך 10 שניות
-            </h1>
-            <p
-              className="mx-auto mt-6 max-w-xl text-lg sm:text-xl"
-              style={{ color: "var(--ink)", opacity: 0.72, lineHeight: 1.5 }}
-            >
-              הקלד מילה. עצב אותה. שלח לוואטסאפ. בלי הרשמה, בלי שרת — הכל קורה
-              במחשב שלך.
-            </p>
+              {/* Text side */}
+              <div className="order-2 lg:order-1 lg:pe-8">
+                <Eyebrow className="mb-6">חדש · עכשיו ביטא</Eyebrow>
+                <h1
+                  className="mb-6 leading-[1.05]"
+                  style={{
+                    fontFamily: "'Karantina', 'Heebo', sans-serif",
+                    fontWeight: 700,
+                    fontSize: "clamp(52px, 8vw, 96px)",
+                    letterSpacing: "-0.025em",
+                    color: "var(--ink)",
+                  }}
+                >
+                  מדבקות וואטסאפ{" "}
+                  <span className="underline-brand">בעברית</span> — תוך 60 שניות.
+                </h1>
+                <p className="text-lg mb-8 max-w-lg leading-relaxed" style={{ color: "var(--ink)", opacity: 0.72 }}>
+                  הקלד מילה. בחר סגנון. שלח לוואטסאפ. בלי אפליקציה, בלי הרשמה, בלי כאב ראש.
+                </p>
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <Link href="/templates">
+                    <BrutalButton variant="primary" size="lg" iconLeft={<FileText className="w-5 h-5" />}>
+                      צור מדבקה ראשונה
+                    </BrutalButton>
+                  </Link>
+                  <a href="#how">
+                    <BrutalButton variant="secondary" size="lg" iconLeft={<Play className="w-4 h-4" />}>
+                      צפה בדוגמה
+                    </BrutalButton>
+                  </a>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold" style={{ color: "#5a4252" }}>
+                  {["ללא הרשמה", "100% בעברית", "יצוא ישיר ל-WA"].map((t) => (
+                    <span key={t} className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: "hsl(var(--primary))" }} />
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-            <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/templates">
-                <BrutalButton variant="primary" size="lg" iconLeft={<Wand2 size={20} />}>
-                  התחל ליצור — חינם
-                </BrutalButton>
-              </Link>
-              <a
-                href="#how"
-                className="press-active inline-flex items-center gap-2 px-5 py-3.5 text-base font-extrabold"
-                style={{
-                  background: "#fff",
-                  color: "var(--ink)",
-                  border: "2.5px solid var(--ink)",
-                  borderRadius: 16,
-                  boxShadow: "4px 5px 0 var(--ink)",
-                }}
-              >
-                איך זה עובד?
-                <ArrowLeft size={16} />
-              </a>
+              {/* Visual side — floating StickerTiles */}
+              <div className="order-1 lg:order-2 relative h-[380px] lg:h-[500px]">
+                <div className="absolute top-8 right-8">
+                  <StickerTile word="יאללה" color="green" rotation={-12} size="lg" withTape float />
+                </div>
+                <div className="absolute bottom-12 right-32 z-10">
+                  <StickerTile word="חלאס" color="pink" rotation={8} size="lg" withTape float />
+                </div>
+                <div className="absolute top-32 left-8">
+                  <StickerTile word="חחחח" color="magenta" rotation={-6} size="md" float />
+                </div>
+                <div className="absolute bottom-4 left-16">
+                  <StickerTile word="סבבה" color="orange" rotation={10} size="md" withTape float />
+                </div>
+              </div>
             </div>
-
-            <p
-              className="mt-5 text-sm font-bold"
-              style={{ color: "#5a4252", opacity: 0.85 }}
-            >
-              3 מדבקות חינם · ₪29 חד-פעמי לכל החיים · 14 יום החזר מלא
-            </p>
           </div>
         </section>
 
         {/* ───────── HOW IT WORKS ───────── */}
-        <section id="how" className="py-16">
-          <SectionHeading
-            kicker="איך זה עובד"
-            title="3 צעדים, ופחות מדקה"
-            subtitle="העורך עובד ב-100% בדפדפן שלך — אף תמונה לא נשלחת לשרת."
-          />
-          <div className="grid gap-5 md:grid-cols-3">
-            {[
-              {
-                num: "01",
-                Icon: Hand,
-                title: "כתוב מילה",
-                body: "יאללה, חלאס, סבבה, או כל מילה שתרצה. בעברית, באנגלית, או גם עם אימוג'י.",
-              },
-              {
-                num: "02",
-                Icon: Sparkles,
-                title: "עצב אותה",
-                body: "10 סגנונות צבע — מקלאסי לבן עד גרפיטי וניאון. 13 פונטים עבריים. גרור איפה שתרצה.",
-              },
-              {
-                num: "03",
-                Icon: Send,
-                title: "שלח לוואטסאפ",
-                body: "כפתור אחד פותח שיתוף ישר לוואטסאפ. לחיצה ארוכה בצ'אט → 'הוסף למדבקות'. זהו.",
-              },
-            ].map((step) => (
-              <div
-                key={step.num}
-                className="p-7"
+        <section id="how" className="py-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-14">
+              <Eyebrow className="mb-4">שלושה צעדים בלבד</Eyebrow>
+              <h2
                 style={{
-                  background: "#fff",
-                  border: "3px solid var(--ink)",
-                  borderRadius: 22,
-                  boxShadow: "6px 7px 0 var(--ink)",
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "clamp(36px, 5vw, 56px)",
+                  lineHeight: 1.05,
+                  letterSpacing: "-0.015em",
+                  color: "var(--ink)",
                 }}
               >
-                <div className="mb-4 flex items-center justify-between">
-                  <span
-                    className="inline-block px-3 py-1"
-                    style={{
-                      background: "var(--paper)",
-                      border: "2px solid var(--ink)",
-                      borderRadius: 8,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      letterSpacing: "0.05em",
-                      boxShadow: "2px 3px 0 var(--ink)",
-                    }}
-                  >
-                    {step.num}
-                  </span>
+                ככה זה עובד
+              </h2>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {[
+                {
+                  n: 1,
+                  Icon: Type,
+                  colorCls: "bg-sticker-pink/15 text-sticker-pink",
+                  title: "הקלד מילה",
+                  desc: "הקלד את הביטוי האהוב — 'יאללה', 'חלאס', שם של חבר. עברית מלאה, RTL מהקלדה הראשונה.",
+                },
+                {
+                  n: 2,
+                  Icon: Sparkles,
+                  colorCls: "bg-primary-soft text-primary-deep",
+                  title: "בחר סגנון",
+                  desc: "50 סגנונות מוכנים — קלאסי, גרפיטי, נאון, 8-בית. גם וינטג' עם סלידר.",
+                },
+                {
+                  n: 3,
+                  Icon: Send,
+                  colorCls: "bg-info-bg text-info",
+                  title: "שלח לוואטסאפ",
+                  desc: "קליק על 'שלח לוואטסאפ' והוא נפתח עם הסטיקר. WebP 512×512 שקוף, מוכן להדבקה.",
+                },
+              ].map((step) => (
+                <div
+                  key={step.n}
+                  className="brutal-card brutal-card-hover p-6 relative"
+                >
                   <div
-                    className="grid h-12 w-12 place-items-center"
+                    className="absolute -top-3 right-6 w-9 h-9 rounded-full bg-ink text-cream flex items-center justify-center font-bold text-sm"
+                    style={{ border: "2.5px solid var(--ink)" }}
+                  >
+                    {step.n}
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${step.colorCls}`}>
+                    <step.Icon className="w-6 h-6" />
+                  </div>
+                  <h3
+                    className="mb-2"
                     style={{
-                      background: "var(--wa)",
-                      color: "#fff",
-                      border: "2.5px solid var(--ink)",
-                      borderRadius: 14,
-                      boxShadow: "3px 4px 0 var(--ink)",
+                      fontFamily: "'Karantina', 'Heebo', sans-serif",
+                      fontWeight: 700,
+                      fontSize: 28,
+                      lineHeight: 1.1,
                     }}
                   >
-                    <step.Icon size={22} strokeWidth={2.4} />
-                  </div>
+                    {step.title}
+                  </h3>
+                  <p className="text-[15px] leading-relaxed" style={{ color: "var(--ink)", opacity: 0.72 }}>
+                    {step.desc}
+                  </p>
                 </div>
-                <h3
-                  style={{
-                    fontFamily: "'Karantina', 'Heebo', sans-serif",
-                    fontWeight: 700,
-                    fontSize: 32,
-                    lineHeight: 1.1,
-                    letterSpacing: "-0.01em",
-                    marginBottom: 6,
-                  }}
-                >
-                  {step.title}
-                </h3>
-                <p
-                  className="text-[15px] leading-relaxed"
-                  style={{ color: "var(--ink)", opacity: 0.75 }}
-                >
-                  {step.body}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* ───────── PHOTO → STICKER (the existing flow, in a Playful card) ───────── */}
+        {/* ───────── PHOTO → STICKER ───────── */}
         <section className="py-16">
-          <SectionHeading
-            kicker="או — תמונה למדבקה"
-            title="העלה תמונה, נקבל מדבקה"
-            subtitle="הסרת רקע אוטומטית, ב-10 שניות, בלי הרשמה."
-          />
-          <div className="flex justify-center">
-            <div
-              className="w-full max-w-md p-2"
-              style={{
-                background: "#fff",
-                border: "3px solid var(--ink)",
-                borderRadius: 24,
-                boxShadow: "8px 9px 0 var(--ink)",
-              }}
-            >
-              <StickerMaker />
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-10 text-center">
+              <div
+                className="mb-3 inline-block px-3 py-1"
+                style={{
+                  background: "var(--paper)",
+                  border: "2px solid var(--ink)",
+                  borderRadius: 100,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  boxShadow: "2px 3px 0 var(--ink)",
+                }}
+              >
+                או — תמונה למדבקה
+              </div>
+              <h2
+                style={{
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "clamp(32px, 5vw, 48px)",
+                  lineHeight: 1.05,
+                  letterSpacing: "-0.015em",
+                  color: "var(--ink)",
+                }}
+              >
+                העלה תמונה, נקבל מדבקה
+              </h2>
             </div>
-          </div>
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <Link
-              href="/templates"
-              className="press-active inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold"
-              style={{
-                background: "#fff",
-                border: "2.5px solid var(--ink)",
-                borderRadius: 12,
-                boxShadow: "3px 4px 0 var(--ink)",
-              }}
-            >
-              <ImageIcon size={14} />
-              עורך מדבקות טקסט →
-            </Link>
-            {isSignedIn && (
+            <div className="flex justify-center">
+              <div
+                className="w-full max-w-md p-2"
+                style={{
+                  background: "#fff",
+                  border: "3px solid var(--ink)",
+                  borderRadius: 24,
+                  boxShadow: "8px 9px 0 var(--ink)",
+                }}
+              >
+                <StickerMaker />
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
               <Link
-                href="/gallery"
+                href="/templates"
                 className="press-active inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold"
                 style={{
                   background: "#fff",
@@ -414,99 +259,179 @@ export default async function Home() {
                   boxShadow: "3px 4px 0 var(--ink)",
                 }}
               >
-                <Camera size={14} />
-                הגלריה שלי →
+                <Wand2 size={14} />
+                עורך מדבקות טקסט →
               </Link>
-            )}
+              {isSignedIn && (
+                <Link
+                  href="/gallery"
+                  className="press-active inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold"
+                  style={{
+                    background: "#fff",
+                    border: "2.5px solid var(--ink)",
+                    borderRadius: 12,
+                    boxShadow: "3px 4px 0 var(--ink)",
+                  }}
+                >
+                  הגלריה שלי →
+                </Link>
+              )}
+            </div>
           </div>
         </section>
 
-        {/* ───────── HOW IT BECOMES A WHATSAPP STICKER ───────── */}
-        <section className="py-16">
-          <div
-            className="mx-auto max-w-3xl p-7 text-right"
-            style={{
-              background: "var(--paper)",
-              border: "2.5px solid var(--ink)",
-              borderRadius: 22,
-              boxShadow: "5px 6px 0 var(--ink)",
-              position: "relative",
-            }}
-          >
-            <span
-              className="absolute right-6 top-[-12px] inline-block px-3 py-1"
-              style={{
-                background: "var(--wa)",
-                color: "#fff",
-                border: "2px solid var(--ink)",
-                borderRadius: 8,
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
+        {/* ───────── COUNTER STRIP ───────── */}
+        <section className="pb-20">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div
+              className="brutal-card p-6 md:p-8 flex flex-wrap md:flex-nowrap items-center justify-between gap-6"
             >
-              💡 חשוב לדעת
-            </span>
-            <h3
-              style={{
-                fontFamily: "'Karantina', 'Heebo', sans-serif",
-                fontWeight: 700,
-                fontSize: 32,
-                lineHeight: 1.1,
-                letterSpacing: "-0.01em",
-                marginBottom: 12,
-              }}
-            >
-              איך המדבקה נוספת למגש של וואטסאפ?
-            </h3>
-            <p
-              className="mb-4 text-base leading-relaxed"
-              style={{ color: "var(--ink)", opacity: 0.85 }}
-            >
-              וואטסאפ חוסמת אתרי אינטרנט מהוספה ישירה למגש המדבקות שלך. אין API
-              ציבורי. הזרימה היא חד-פעמית כזו:
-            </p>
-            <ol className="space-y-3">
-              {[
-                "המדבקה נשלחת לוואטסאפ כתמונה (webp 512×512, שקופה)",
-                "לחיצה ארוכה עליה בצ'אט → 'הוסף למדבקות' (אנדרואיד) / 'הוסף למועדפות' (iOS)",
-                "מעכשיו היא במגש הקבוע שלך, לכל החיים",
-              ].map((line, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-3"
-                  style={{ color: "var(--ink)" }}
-                >
-                  <span
-                    className="grid h-6 w-6 flex-none place-items-center text-xs font-extrabold"
+              {/* Left (RTL: visual left) — avatars */}
+              <div className="flex items-center gap-4 order-2 md:order-1">
+                <div className="flex -space-x-2 rtl:space-x-reverse">
+                  {["🔥", "💚", "✨", "🎉", "💛"].map((e, i) => (
+                    <div
+                      key={i}
+                      className="w-10 h-10 rounded-full border-2 border-card bg-cream flex items-center justify-center text-lg"
+                    >
+                      {e}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm font-bold">הצטרפו לקהילה</p>
+              </div>
+              {/* Right (RTL: visual right) — big counter */}
+              <div className="flex items-center gap-4 order-1 md:order-2">
+                <div className="text-end">
+                  <div
+                    className="flex items-center gap-2"
                     style={{
-                      background: "var(--wa)",
-                      color: "#fff",
-                      border: "1.5px solid var(--ink)",
-                      borderRadius: 7,
+                      fontFamily: "'Karantina', 'Heebo', sans-serif",
+                      fontWeight: 700,
+                      fontSize: "clamp(36px, 6vw, 56px)",
+                      lineHeight: 1,
+                      color: "var(--ink)",
                     }}
                   >
-                    {i + 1}
-                  </span>
-                  <span className="text-[15px] leading-relaxed">{line}</span>
-                </li>
-              ))}
-            </ol>
+                    48,754
+                  </div>
+                  <p className="text-xs" style={{ color: "var(--ink)", opacity: 0.6 }}>
+                    מדבקות נוצרו עד היום
+                  </p>
+                </div>
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: "hsl(var(--primary))",
+                    color: "#fff",
+                    border: "2.5px solid var(--ink)",
+                    boxShadow: "var(--shadow-brutal-sm)",
+                  }}
+                >
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ───────── WHATSAPP SETUP INFO ───────── */}
+        <section className="py-16">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div
+              className="mx-auto max-w-3xl p-7 text-right"
+              style={{
+                background: "var(--paper)",
+                border: "2.5px solid var(--ink)",
+                borderRadius: 22,
+                boxShadow: "5px 6px 0 var(--ink)",
+                position: "relative",
+              }}
+            >
+              <span
+                className="absolute right-6 top-[-12px] inline-block px-3 py-1"
+                style={{
+                  background: "var(--wa)",
+                  color: "#fff",
+                  border: "2px solid var(--ink)",
+                  borderRadius: 8,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                💡 חשוב לדעת
+              </span>
+              <h3
+                style={{
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 32,
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.01em",
+                  marginBottom: 12,
+                }}
+              >
+                איך המדבקה נוספת למגש של וואטסאפ?
+              </h3>
+              <p className="mb-4 text-base leading-relaxed" style={{ color: "var(--ink)", opacity: 0.85 }}>
+                וואטסאפ חוסמת אתרי אינטרנט מהוספה ישירה למגש המדבקות. הזרימה היא:
+              </p>
+              <ol className="space-y-3">
+                {[
+                  "המדבקה נשלחת לוואטסאפ כתמונה (webp 512×512, שקופה)",
+                  "לחיצה ארוכה עליה בצ'אט → 'הוסף למדבקות' (אנדרואיד) / 'הוסף למועדפות' (iOS)",
+                  "מעכשיו היא במגש הקבוע שלך, לכל החיים",
+                ].map((line, i) => (
+                  <li key={i} className="flex items-start gap-3" style={{ color: "var(--ink)" }}>
+                    <span
+                      className="grid h-6 w-6 flex-none place-items-center text-xs font-extrabold"
+                      style={{
+                        background: "var(--wa)",
+                        color: "#fff",
+                        border: "1.5px solid var(--ink)",
+                        borderRadius: 7,
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-[15px] leading-relaxed">{line}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
         </section>
 
         {/* ───────── PRICING ───────── */}
-        <section id="pricing" className="py-16">
-          <SectionHeading
-            kicker="תמחור"
-            title="פעם אחת, לכל החיים"
-            subtitle="3 מדבקות בחינם כדי לבדוק. רוצה ללא הגבלה ובלי סימן מים — ₪29 חד-פעמי."
-          />
-          <div className="mx-auto max-w-md">
+        <section id="pricing" className="py-20" style={{ background: "rgba(251,243,220,0.5)" }}>
+          <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10">
+              <p className="font-bold text-sm tracking-wide mb-3">
+                <span style={{ color: "hsl(var(--sticker-orange))" }}>פשוט</span>
+                <span className="mx-2" style={{ opacity: 0.4 }}>·</span>
+                <span style={{ color: "hsl(var(--primary))" }}>הוגן</span>
+                <span className="mx-2" style={{ opacity: 0.4 }}>·</span>
+                <span style={{ color: "hsl(var(--sticker-pink))" }}>חד-פעמי</span>
+              </p>
+              <h2
+                style={{
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "clamp(36px, 5vw, 56px)",
+                  lineHeight: 1.05,
+                  letterSpacing: "-0.015em",
+                  color: "var(--ink)",
+                }}
+              >
+                מחיר אחד. לתמיד.
+              </h2>
+            </div>
+
             <div
-              className="p-8"
+              className="p-8 relative"
               style={{
                 background: "#fff",
                 border: "3px solid var(--ink)",
@@ -514,77 +439,71 @@ export default async function Home() {
                 boxShadow: "8px 9px 0 var(--ink)",
               }}
             >
-              <div className="flex items-center justify-between">
-                <div
-                  className="inline-block px-3 py-1"
-                  style={{
-                    background: "var(--paper)",
-                    border: "2px solid var(--ink)",
-                    borderRadius: 100,
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Pro · חד פעמי
-                </div>
-                <div
-                  className="text-left"
+              <YellowTape className="-top-3 right-1/2 translate-x-1/2" />
+
+              <div className="flex items-baseline gap-3 mb-2">
+                <span
                   style={{
                     fontFamily: "'Karantina', 'Heebo', sans-serif",
                     fontWeight: 700,
+                    fontSize: 72,
+                    lineHeight: 0.9,
+                    letterSpacing: "-0.02em",
+                    color: "var(--wa-dark)",
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: 64,
-                      lineHeight: 0.9,
-                      letterSpacing: "-0.02em",
-                      color: "var(--wa-dark)",
-                    }}
-                  >
-                    ₪29
-                  </div>
-                  <div
-                    className="text-xs font-extrabold"
-                    style={{ color: "#5a4252" }}
-                  >
-                    פעם אחת. לתמיד.
-                  </div>
-                </div>
+                  ₪29
+                </span>
+                <span
+                  className="px-3 py-1 rounded-full text-xs font-bold"
+                  style={{
+                    background: "var(--ink)",
+                    color: "var(--cream)",
+                  }}
+                >
+                  חד-פעמי
+                </span>
               </div>
 
-              <ul className="mt-6 space-y-3">
+              <p className="mb-6 text-[15px]" style={{ color: "var(--ink)", opacity: 0.72 }}>
+                לא מנוי. לא תיתפס בהפתעה. תשלום אחד וזהו.
+              </p>
+
+              <ul className="space-y-3 mb-7">
                 {[
-                  "מדבקות ללא הגבלה",
-                  "ללא סימן מים",
-                  "גלריה אישית + היסטוריה",
-                  "כל הסגנונות והפונטים",
-                  "14 יום החזר מלא, ללא שאלות",
-                ].map((perk, i) => (
-                  <li key={i} className="flex items-center gap-3">
-                    <CheckCircle2
-                      size={20}
-                      style={{ color: "var(--wa-dark)" }}
-                      strokeWidth={2.4}
-                    />
-                    <span className="text-[15px] font-bold">{perk}</span>
+                  "יצירה ועריכה ללא הגבלה",
+                  "8 פונטים עבריים + 10 סגנונות צבע",
+                  "יצוא ישיר לוואטסאפ (WebP 512×512)",
+                  "ללא חתימת מים, ללא פרסומות",
+                  "עדכוני סגנונות חדשים לכל החיים",
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-3 text-[15px]">
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                      style={{
+                        background: "hsl(var(--primary))",
+                        color: "#fff",
+                      }}
+                    >
+                      <Check className="w-3 h-3" strokeWidth={3} />
+                    </span>
+                    {f}
                   </li>
                 ))}
               </ul>
 
-              <Link href="/templates?upgrade=1" className="mt-7 block">
-                <BrutalButton variant="primary" size="lg" fullWidth>
-                  התחל ליצור ללא הגבלה
+              <Link href="/templates?upgrade=1" className="block">
+                <BrutalButton variant="primary" size="lg" fullWidth iconLeft={<FileText className="w-5 h-5" />}>
+                  קח אותי לעורך
                 </BrutalButton>
               </Link>
+
               <p
-                className="mt-3 text-center text-xs font-bold"
+                className="text-center text-xs mt-4 flex items-center justify-center gap-1.5 font-bold"
                 style={{ color: "#5a4252" }}
               >
-                התשלום מאובטח דרך LemonSqueezy. ביטול 14 יום, החזר מלא.
+                <Shield className="w-3.5 h-3.5" />
+                החזר כספי תוך 14 ימים — בלי שאלות
               </p>
             </div>
           </div>
@@ -592,70 +511,92 @@ export default async function Home() {
 
         {/* ───────── FAQ ───────── */}
         <section className="py-16">
-          <SectionHeading
-            kicker="FAQ"
-            title="שאלות שואלים אותנו"
-          />
-          <div className="mx-auto max-w-3xl space-y-3">
-            {[
-              {
-                q: "האם זה באמת חינם?",
-                a: "כן, 3 מדבקות חינם, בלי כרטיס אשראי. אחרי 3 — שדרוג חד-פעמי של ₪29 פותח גישה ללא הגבלה לכל החיים.",
-              },
-              {
-                q: "התמונות שלי נשמרות בשרת שלכם?",
-                a: "לא. הסרת הרקע והעיבוד קורים 100% במחשב שלך. שום תמונה לא יוצאת מהדפדפן שלך אל השרת שלנו.",
-              },
-              {
-                q: "איך המדבקה נוספת לוואטסאפ?",
-                a: "אנחנו שולחים את המדבקה ל-וואטסאפ כתמונה, ואתה לוחץ עליה לחיצה ארוכה ובוחר 'הוסף למדבקות'. זה החוק של וואטסאפ — אין API ציבורי שמאפשר הוספה ישירה.",
-              },
-              {
-                q: "אפשר לקבל החזר?",
-                a: "כן. תוך 14 יום מהתשלום — החזר מלא, ללא שאלות. כפתור 'בקש החזר' זמין באזור החשבון שלך.",
-              },
-              {
-                q: "האם יש אפליקציית מובייל?",
-                a: "האתר עובד מצויין במובייל ואפשר להוסיף אותו למסך הבית כ-PWA. אפליקציה ילידית בקנה לעתיד.",
-              },
-            ].map((item, i) => (
-              <details
-                key={i}
-                className="group p-5"
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-10 text-center">
+              <div
+                className="mb-3 inline-block px-3 py-1"
                 style={{
-                  background: "#fff",
-                  border: "2.5px solid var(--ink)",
-                  borderRadius: 16,
-                  boxShadow: "4px 5px 0 var(--ink)",
+                  background: "var(--paper)",
+                  border: "2px solid var(--ink)",
+                  borderRadius: 100,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  boxShadow: "2px 3px 0 var(--ink)",
                 }}
               >
-                <summary
-                  className="flex cursor-pointer items-center justify-between text-[17px] font-extrabold"
-                  style={{ fontFamily: "'Karantina', 'Heebo', sans-serif" }}
+                FAQ
+              </div>
+              <h2
+                style={{
+                  fontFamily: "'Karantina', 'Heebo', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "clamp(32px, 5vw, 48px)",
+                  lineHeight: 1.05,
+                  letterSpacing: "-0.015em",
+                  color: "var(--ink)",
+                }}
+              >
+                שאלות שואלים אותנו
+              </h2>
+            </div>
+            <div className="mx-auto max-w-3xl space-y-3">
+              {[
+                {
+                  q: "האם זה באמת חינם?",
+                  a: "כן, 3 מדבקות חינם, בלי כרטיס אשראי. אחרי 3 — שדרוג חד-פעמי של ₪29 פותח גישה ללא הגבלה לכל החיים.",
+                },
+                {
+                  q: "התמונות שלי נשמרות בשרת שלכם?",
+                  a: "לא. הסרת הרקע והעיבוד קורים 100% במחשב שלך. שום תמונה לא יוצאת מהדפדפן שלך אל השרת שלנו.",
+                },
+                {
+                  q: "איך המדבקה נוספת לוואטסאפ?",
+                  a: "אנחנו שולחים את המדבקה לוואטסאפ כתמונה, ואתה לוחץ עליה לחיצה ארוכה ובוחר 'הוסף למדבקות'. זה החוק של וואטסאפ — אין API ציבורי שמאפשר הוספה ישירה.",
+                },
+                {
+                  q: "אפשר לקבל החזר?",
+                  a: "כן. תוך 14 יום מהתשלום — החזר מלא, ללא שאלות. כפתור 'בקש החזר' זמין באזור החשבון שלך.",
+                },
+                {
+                  q: "האם יש אפליקציית מובייל?",
+                  a: "האתר עובד מצויין במובייל ואפשר להוסיף אותו למסך הבית כ-PWA. אפליקציה ילידית בקנה לעתיד.",
+                },
+              ].map((item, i) => (
+                <details
+                  key={i}
+                  className="group p-5"
+                  style={{
+                    background: "#fff",
+                    border: "2.5px solid var(--ink)",
+                    borderRadius: 16,
+                    boxShadow: "4px 5px 0 var(--ink)",
+                  }}
                 >
-                  <span style={{ fontSize: 22, letterSpacing: "-0.01em" }}>
-                    {item.q}
-                  </span>
-                  <span
-                    className="text-2xl transition-transform group-open:rotate-45"
-                    style={{ color: "var(--wa-dark)" }}
+                  <summary
+                    className="flex cursor-pointer items-center justify-between text-[17px] font-extrabold"
+                    style={{ fontFamily: "'Karantina', 'Heebo', sans-serif" }}
                   >
-                    +
-                  </span>
-                </summary>
-                <p
-                  className="mt-3 text-[15px] leading-relaxed"
-                  style={{ color: "var(--ink)", opacity: 0.8 }}
-                >
-                  {item.a}
-                </p>
-              </details>
-            ))}
+                    <span style={{ fontSize: 22, letterSpacing: "-0.01em" }}>{item.q}</span>
+                    <span
+                      className="text-2xl transition-transform group-open:rotate-45"
+                      style={{ color: "var(--wa-dark)" }}
+                    >
+                      +
+                    </span>
+                  </summary>
+                  <p className="mt-3 text-[15px] leading-relaxed" style={{ color: "var(--ink)", opacity: 0.8 }}>
+                    {item.a}
+                  </p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
-
-      </div>
       </main>
+
       <Footer variant="full" />
     </div>
   );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UserButton, useAuth, SignUpButton } from "@clerk/nextjs";
 import {
+  ArrowRight,
   Camera,
   Check,
   ChevronDown,
@@ -28,6 +29,8 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { Header } from "@/components/Header";
+import { BrutalButton } from "@/components/BrutalButton";
 import {
   defaultEmojiSize,
   EMOJI_CATEGORIES,
@@ -774,7 +777,7 @@ export default function TemplatesPage() {
   );
 
   return (
-    <main
+    <div
       dir="rtl"
       className="relative min-h-screen text-ink"
       style={{
@@ -788,65 +791,36 @@ export default function TemplatesPage() {
         fontFamily: "'Assistant', system-ui, sans-serif",
       }}
     >
-      {/* hand-drawn squiggles, decorative only */}
-      <svg
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 h-full w-full"
-        style={{ opacity: 0.22 }}
-      >
-        <path
-          d="M -50 200 Q 100 150, 220 220 T 470 200"
-          stroke="var(--ink)"
-          strokeWidth="3"
-          fill="none"
-          strokeLinecap="round"
-        />
-        <path
-          d="M 800 640 Q 920 580, 1060 640 T 1330 620"
-          stroke="var(--ink)"
-          strokeWidth="3"
-          fill="none"
-          strokeLinecap="round"
-        />
-      </svg>
+      {/* Unified sticky header — logo + auth */}
+      <Header variant="minimal" />
 
-      <div className="relative z-10 mx-auto max-w-7xl px-6 py-6 lg:px-8">
-        {/* HEADER */}
-        <header className="mb-5 flex items-center justify-between">
-          {/* RTL leading edge (right): logo + wordmark */}
-          <Link href="/" className="flex items-center gap-3.5">
-            <div
-              className="grid h-14 w-14 place-items-center rounded-[18px] text-cream"
-              style={{
-                background: "var(--ink)",
-                transform: "rotate(-6deg)",
-                boxShadow: `0 6px 0 var(--wa), 0 12px 24px rgba(0,0,0,0.18)`,
-              }}
-            >
-              <StickerIcon size={28} strokeWidth={2.4} />
-            </div>
-            <div>
-              <div
-                className="text-[38px] leading-none"
-                style={{
-                  fontFamily: "'Karantina', 'Heebo', sans-serif",
-                  fontWeight: 700,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Madbeka
-              </div>
-              <div
-                className="mt-0.5 text-[13px] font-bold"
-                style={{ color: "#5a4252" }}
-              >
-                עורך מדבקות 🎨
-              </div>
-            </div>
+      {/* Editor toolbar — back nav + action buttons */}
+      <div
+        className="sticky top-16 z-10 border-b"
+        style={{
+          background: "var(--cream)",
+          borderColor: "hsl(var(--border-soft))",
+        }}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between h-14 px-4 sm:px-6 lg:px-8">
+          {/* Back */}
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-sm font-bold press-active"
+            style={{ color: "var(--ink)" }}
+          >
+            <ArrowRight size={16} />
+            חזור
           </Link>
 
-          {/* Left: action buttons */}
-          <div className="flex items-center gap-2.5">
+          {/* Center nav */}
+          <div className="hidden md:flex items-center gap-5 text-sm font-bold" style={{ color: "var(--ink)", opacity: 0.65 }}>
+            <Link href="/#how" className="hover:opacity-100 transition-opacity">איך זה עובד</Link>
+            <Link href="/#pricing" className="hover:opacity-100 transition-opacity">מחיר</Link>
+          </div>
+
+          {/* Right: undo / redo + download + share + user */}
+          <div className="flex items-center gap-2">
             <Chip aria-label="ביטול" disabled>
               <Undo2 size={16} />
             </Chip>
@@ -869,11 +843,6 @@ export default function TemplatesPage() {
                 </PlayfulBtn>
               </SignUpButton>
             )}
-            {/* On Android (Capacitor shell): primary CTA is "Add to
-                WhatsApp" — fires the Sticker Pack Intent so the pack
-                lands in the user's library in one tap. On the web we
-                fall back to plain Web Share (image attachment + manual
-                long-press flow). */}
             {isNative ? (
               <PlayfulBtn
                 onClick={onAddToWhatsAppPack}
@@ -899,7 +868,32 @@ export default function TemplatesPage() {
               </div>
             )}
           </div>
-        </header>
+        </div>
+      </div>
+
+      {/* hand-drawn squiggles, decorative only */}
+      <svg
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+        style={{ opacity: 0.22 }}
+      >
+        <path
+          d="M -50 200 Q 100 150, 220 220 T 470 200"
+          stroke="var(--ink)"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 800 640 Q 920 580, 1060 640 T 1330 620"
+          stroke="var(--ink)"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </svg>
+
+      <main className="relative z-10 mx-auto max-w-7xl px-6 py-6 lg:px-8">
 
         {/* MAIN GRID */}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
@@ -1694,8 +1688,8 @@ export default function TemplatesPage() {
         >
           MadbekaApp.co.il
         </footer>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 
