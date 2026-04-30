@@ -60,6 +60,10 @@ import {
   buildPackFromGallery,
   stickersNeededForPack,
 } from "@/lib/whatsapp-pack";
+import { PaywallModal } from "@/components/PaywallModal";
+import { PaymentSuccessModal } from "@/components/PaymentSuccessModal";
+import { BgRemovalLoadingModal, type BgRemovalStage } from "@/components/BgRemovalLoadingModal";
+import { useToast } from "@/components/Toast";
 
 interface UserStatus {
   hasPaid: boolean;
@@ -181,6 +185,10 @@ export default function TemplatesPage() {
   const [notice, setNotice] = useState("");
   const [zoomed, setZoomed] = useState(false);
   const [openEmojiCat, setOpenEmojiCat] = useState<string | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [bgRemovalStage, setBgRemovalStage] = useState<BgRemovalStage | null>(null);
+  const { success: toastSuccess, error: toastError, info: toastInfo, warning: toastWarning } = useToast();
 
   // Post-share / post-download instructions modal. WhatsApp doesn't expose
   // a "send as sticker" web intent, so we always end up sending a .webp
@@ -251,6 +259,23 @@ export default function TemplatesPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [zoomed]);
+
+  // Detect ?paid=1 from Lemon Squeezy success_url redirect.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paid") === "1") {
+      setShowPaymentSuccess(true);
+      // Refresh user status so watermark disappears immediately
+      if (isSignedIn) {
+        fetch("/api/stickers/me").then(async (r) => {
+          if (r.ok) {
+            const data = await r.json() as UserStatus;
+            setStatus(data);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [isSignedIn]);
 
   // Load user status.
   useEffect(() => {
@@ -349,6 +374,7 @@ export default function TemplatesPage() {
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
+      toastWarning("תמונה גדולה מדי — מקסימום 10MB", "נסה תמונה קטנה יותר.");
       setNotice("התמונה גדולה מדי. מקסימום 10MB.");
       return;
     }
@@ -381,7 +407,7 @@ export default function TemplatesPage() {
       console.error("[image-ingest] failed:", err);
       setNotice("לא הצלחנו לטעון את התמונה. נסה תמונה אחרת.");
     }
-  }, []);
+  }, [toastWarning]);
 
   const handleImageFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -474,9 +500,11 @@ export default function TemplatesPage() {
       return;
     }
     setIsRemovingBg(true);
-    setNotice("מסיר רקע... הפעם הראשונה עשויה לקחת דקה (הורדת המודל).");
+    setBgRemovalStage(1);
+    setNotice("");
     try {
       console.log("[bg-removal] importing @imgly/background-removal...");
+      setBgRemovalStage(2);
       const { removeBackground } = await import("@imgly/background-removal");
       // Decode data: URLs locally instead of round-tripping through fetch().
       // CSP `connect-src` doesn't allow `data:` (and we don't want to add
@@ -507,8 +535,10 @@ export default function TemplatesPage() {
         inputBlob = await (await fetch(target.src)).blob();
       }
       console.log("[bg-removal] running model on blob size", inputBlob.size);
+      setBgRemovalStage(3);
       const resultBlob = await removeBackground(inputBlob);
       console.log("[bg-removal] success, output size", resultBlob.size);
+      setBgRemovalStage(4);
 
       const newDataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -527,17 +557,20 @@ export default function TemplatesPage() {
       imageCache.current.set(target.id, newImg);
       updateLayer(target.id, { src: newDataUrl });
       setImageTick((t) => t + 1);
-      setNotice("הרקע הוסר בהצלחה.");
+      toastSuccess("הרקע הוסר בהצלחה!");
+      setNotice("");
     } catch (err) {
       // Surface the underlying error in DevTools — the user-facing notice
       // is intentionally generic, but without this log we have no way to
       // tell whether it's CSP, network, WASM, or a model-format issue.
       console.error("[bg-removal] failed:", err);
+      toastError("לא הצלחנו להסיר את הרקע.", "נסה תמונה אחרת.");
       setNotice("לא הצלחנו להסיר את הרקע. נסה תמונה אחרת.");
     } finally {
       setIsRemovingBg(false);
+      setBgRemovalStage(null);
     }
-  }, [selectedImage, selectedId, layers.length, updateLayer]);
+  }, [selectedImage, selectedId, layers.length, updateLayer, toastSuccess, toastError]);
 
   // Preset click — wipes the stack and seeds with one word layer.
   const applyTemplate = useCallback((t: TemplateDef) => {
@@ -580,7 +613,9 @@ export default function TemplatesPage() {
     try {
       const res = await fetch("/api/stickers/log", { method: "POST" });
       if (res.status === 402) {
-        setNotice("סיימת את המדבקות החינמיות. שדרג ב-₪29.");
+        setWorking(null);
+        toastInfo("סיימת את 3 החינמיים", "שדרג להמשיך · ₪29 חד פעמי.");
+        setShowPaywall(true);
         return;
       }
       if (!res.ok) throw new Error("שגיאה ברישום");
@@ -596,11 +631,12 @@ export default function TemplatesPage() {
       setPostActionModal({ kind: "downloaded" });
     } catch (err) {
       console.error("[download] failed:", err);
+      toastError("ההורדה נכשלה", err instanceof Error ? err.message : "נסה שוב.");
       setNotice(err instanceof Error ? err.message : "משהו השתבש בהורדה.");
     } finally {
       setWorking(null);
     }
-  }, [isSignedIn, renderCurrent, primaryLabel]);
+  }, [isSignedIn, renderCurrent, primaryLabel, toastInfo, toastError]);
 
   /**
    * Native-only: bundle the user's gallery into a WhatsApp sticker pack
@@ -663,20 +699,23 @@ export default function TemplatesPage() {
       void saveToGallery(blob, primaryLabel);
       const result = await shareStickerToWhatsApp(blob);
       if (result === "shared") {
+        toastSuccess("המדבקה מוכנה!", "עכשיו פתח ב-WhatsApp ושמור אותה כמדבקה.");
         setPostActionModal({ kind: "shared" });
       } else if (result === "fallback") {
         setPostActionModal({ kind: "fallback" });
       } else if (result === "unsupported") {
+        toastError("שיתוף נכשל — נסה שוב או הורד את הקובץ ישירות.", undefined);
         setNotice("הדפדפן לא תומך בשיתוף ישיר. נסה להוריד ולשתף ידנית.");
       }
       // "cancelled" → user dismissed share sheet; stay quiet, no modal.
     } catch (err) {
       console.error("[share] failed:", err);
+      toastError("שיתוף נכשל — נסה שוב או הורד את הקובץ ישירות.");
       setNotice("השיתוף נכשל. נסה שוב.");
     } finally {
       setWorking(null);
     }
-  }, [renderCurrent, primaryLabel]);
+  }, [renderCurrent, primaryLabel, toastSuccess, toastError]);
 
   // ---------- Drag handlers (canvas hit-test → drag layer) ----------
   const dragStart = useRef<{
@@ -1675,6 +1714,28 @@ export default function TemplatesPage() {
             onDownload={() => {
               setPostActionModal(null);
               void onDownload();
+            }}
+          />
+        )}
+
+        {/* PAYWALL MODAL */}
+        {showPaywall && (
+          <PaywallModal onClose={() => setShowPaywall(false)} />
+        )}
+
+        {/* PAYMENT SUCCESS MODAL */}
+        {showPaymentSuccess && (
+          <PaymentSuccessModal onClose={() => setShowPaymentSuccess(false)} />
+        )}
+
+        {/* BG REMOVAL LOADING MODAL */}
+        {bgRemovalStage !== null && (
+          <BgRemovalLoadingModal
+            stage={bgRemovalStage}
+            onCancel={() => {
+              // We can't cancel the WASM process, but we hide the modal.
+              // The process continues in background and will resolve on its own.
+              setBgRemovalStage(null);
             }}
           />
         )}

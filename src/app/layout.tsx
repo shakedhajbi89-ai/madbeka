@@ -24,6 +24,7 @@ import { GoogleAnalytics } from "@/components/google-analytics";
 import { SplashScreen } from "@/components/splash-screen";
 import { SwRegistrar } from "@/components/sw-registrar";
 import { PUBLIC_URL } from "@/lib/brand";
+import { ToastProvider } from "@/components/Toast";
 // Clerk theme temporarily disabled — caused Internal Server Error in
 // production. Will re-enable after debugging the Appearance shape.
 // import { clerkAppearance } from "@/lib/clerk-theme";
@@ -241,7 +242,9 @@ export default function RootLayout({
         </head>
         <body className="min-h-full flex flex-col font-sans">
           <SplashScreen />
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
           <SwRegistrar />
           <GoogleAnalytics />
         </body>
