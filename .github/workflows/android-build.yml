@@ -88,7 +88,14 @@ jobs:
       - name: Write android/local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
-      # ── 10. Build Debug APK ────────────────────────────────────────────────
+      # ── 10a. Make gradlew executable ───────────────────────────────────────
+      # Windows git doesn't always preserve the +x bit. Set it here so the
+      # Linux runner can execute the wrapper script.
+      - name: Make gradlew executable
+        working-directory: android
+        run: chmod +x ./gradlew
+
+      # ── 10b. Build Debug APK ───────────────────────────────────────────────
       - name: Build Debug APK
         if: ${{ github.event.inputs.build_type != 'release' }}
         working-directory: android
