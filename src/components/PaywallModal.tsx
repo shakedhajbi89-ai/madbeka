@@ -27,10 +27,36 @@ export function PaywallModal({ onClose }: PaywallModalProps) {
 
   const goToCheckout = useCallback(async () => {
     const base = process.env.NEXT_PUBLIC_LEMON_CHECKOUT_URL;
-    if (!base || !userId) {
-      setErrMsg("לא ניתן להתחיל את התשלום כרגע. נסה שוב עוד רגע.");
+    console.log("[checkout] NEXT_PUBLIC_LEMON_CHECKOUT_URL:", base ? "set" : "MISSING");
+    console.log("[checkout] userId:", userId ?? "null");
+
+    if (!base) {
+      console.error("[checkout] NEXT_PUBLIC_LEMON_CHECKOUT_URL is not set");
+      setErrMsg("שגיאת קונפיגורציה — פנה לתמיכה: madbekaapp@gmail.com");
       return;
     }
+
+    if (!userId) {
+      // User not signed in — redirect straight to checkout without a signed token.
+      // The webhook will still fire but without user_token; payment won't auto-unlock
+      // the account, but the user will receive instructions to contact support.
+      // Better UX than a silent failure.
+      console.warn("[checkout] no userId — proceeding without signed token");
+      try {
+        const url = new URL(base);
+        url.searchParams.set(
+          "checkout[success_url]",
+          `${window.location.origin}/templates?paid=1`,
+        );
+        url.searchParams.set("checkout[locale]", "he");
+        window.location.href = url.toString();
+      } catch (err) {
+        console.error("[checkout] URL parse failed:", err, "base:", base);
+        setErrMsg("כתובת התשלום שגויה — פנה לתמיכה.");
+      }
+      return;
+    }
+
     setLoading(true);
     setErrMsg("");
     try {
@@ -38,9 +64,11 @@ export function PaywallModal({ onClose }: PaywallModalProps) {
         method: "GET",
         cache: "no-store",
       });
+      console.log("[checkout] token response status:", res.status);
       if (!res.ok) throw new Error(`token request failed: ${res.status}`);
-      const data = (await res.json()) as { token?: string };
-      if (!data.token) throw new Error("no token in response");
+      const data = (await res.json()) as { token?: string; error?: string };
+      console.log("[checkout] token received:", data.token ? "yes" : "no", data.error ?? "");
+      if (!data.token) throw new Error(data.error ?? "no token in response");
 
       const url = new URL(base);
       url.searchParams.set("checkout[custom][user_token]", data.token);
@@ -49,6 +77,7 @@ export function PaywallModal({ onClose }: PaywallModalProps) {
         `${window.location.origin}/templates?paid=1`,
       );
       url.searchParams.set("checkout[locale]", "he");
+      console.log("[checkout] redirecting to:", url.hostname);
       window.location.href = url.toString();
     } catch (err) {
       console.error("[checkout] token fetch failed:", err);

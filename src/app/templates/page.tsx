@@ -219,6 +219,39 @@ export default function TemplatesPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Mobile canvas shrink-on-scroll
+  const [canvasScale, setCanvasScale] = useState(1);
+  const rafRef = useRef<number | null>(null);
+  const prefersReducedMotion = useRef(false);
+  useEffect(() => {
+    prefersReducedMotion.current =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion.current) return;
+
+    const SCROLL_START = 0;
+    const SCROLL_END = 250;
+    const SCALE_MIN = 0.4;
+
+    const handleScroll = () => {
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const y = window.scrollY;
+        const t = Math.min(1, Math.max(0, (y - SCROLL_START) / (SCROLL_END - SCROLL_START)));
+        // ease-out cubic
+        const eased = 1 - Math.pow(1 - t, 3);
+        setCanvasScale(1 - eased * (1 - SCALE_MIN));
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   // Keep selectedId valid.
   useEffect(() => {
     if (!layers.length) return;
@@ -956,8 +989,20 @@ export default function TemplatesPage() {
           />
         </div>
 
-        {/* ② Canvas + vertical sliders */}
-        <div className="flex items-stretch gap-2">
+        {/* ② Canvas + vertical sliders — sticky shrinking canvas on scroll */}
+        <div
+          className="flex items-start gap-2"
+          style={{
+            position: "sticky",
+            top: 120,
+            zIndex: 8,
+            transformOrigin: "top center",
+            transform: `scale(${canvasScale})`,
+            transition: "transform 0.1s ease-out",
+            // When shrunk, compensate vertical space so content below isn't pushed away
+            marginBottom: canvasScale < 1 ? `calc((${canvasScale} - 1) * 100%)` : undefined,
+          }}
+        >
           {/* Canvas */}
           <div className="relative flex-1 min-w-0">
             <div
@@ -976,19 +1021,24 @@ export default function TemplatesPage() {
                   maxWidth: "calc(100vw - 88px)",
                   border: "3px solid var(--ink)",
                   borderRadius: 22,
-                  boxShadow: SHADOW_4,
+                  boxShadow: canvasScale < 0.7
+                    ? `4px 5px 0 var(--ink), 0 8px 24px rgba(0,0,0,0.18)`
+                    : SHADOW_4,
                 }}
               >
                 <canvas
                   ref={previewRef}
                   width={512}
                   height={512}
-                  onPointerDown={onPointerDownCanvas}
-                  onPointerMove={onPointerMoveCanvas}
-                  onPointerUp={onPointerEndCanvas}
-                  onPointerCancel={onPointerEndCanvas}
-                  className="absolute inset-0 h-full w-full cursor-grab touch-none select-none active:cursor-grabbing"
-                  style={{ borderRadius: 19 }}
+                  onPointerDown={canvasScale > 0.7 ? onPointerDownCanvas : undefined}
+                  onPointerMove={canvasScale > 0.7 ? onPointerMoveCanvas : undefined}
+                  onPointerUp={canvasScale > 0.7 ? onPointerEndCanvas : undefined}
+                  onPointerCancel={canvasScale > 0.7 ? onPointerEndCanvas : undefined}
+                  className="absolute inset-0 h-full w-full touch-none select-none"
+                  style={{
+                    borderRadius: 19,
+                    cursor: canvasScale > 0.7 ? "grab" : "default",
+                  }}
                 />
                 {isDragging && (
                   <div
@@ -1383,48 +1433,6 @@ export default function TemplatesPage() {
           </div>
         )}
 
-        {/* Presets rail */}
-        <div>
-          <div className="mb-2 flex items-center gap-2 px-1 text-[13px] font-extrabold" style={{ letterSpacing: "-0.01em" }}>
-            <Sparkles size={14} />
-            מילים מוכנות
-            <span className="text-xs font-bold" style={{ color: "#5a4252" }}>· הקלק</span>
-          </div>
-          <div className="relative">
-            <div
-              className="templates-rail flex gap-2.5 overflow-x-auto pb-2 pt-1"
-              style={{ scrollbarColor: "var(--ink) transparent" }}
-            >
-              {TEMPLATES.map((t, i) => {
-                const tilt = ((i % 3) - 1) * 2.5;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => applyTemplate(t)}
-                    className="grid flex-none place-items-center transition-transform"
-                    style={{
-                      width: 90,
-                      height: 90,
-                      background: "#fff",
-                      border: "2.5px solid var(--ink)",
-                      borderRadius: 18,
-                      boxShadow: SHADOW_3,
-                      transform: `rotate(${tilt}deg)`,
-                      fontFamily: fontStack(t.font),
-                      fontSize: 20,
-                      fontWeight: 800,
-                      color: "var(--ink)",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.transform = `rotate(${tilt}deg) translate(-2px, -2px)`)}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = `rotate(${tilt}deg)`)}
-                  >
-                    {t.text}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ── DESKTOP LAYOUT (lg+) ── */}

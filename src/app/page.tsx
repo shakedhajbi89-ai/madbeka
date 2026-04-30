@@ -172,7 +172,13 @@ export default async function Home() {
               ].map((step) => (
                 <div
                   key={step.n}
-                  className="brutal-card brutal-card-hover p-6 relative"
+                  className="brutal-card-hover p-6 relative"
+                  style={{
+                    background: "#fff",
+                    border: "2.5px solid var(--ink)",
+                    borderRadius: "var(--radius)",
+                    boxShadow: "6px 7px 0 var(--ink)",
+                  }}
                 >
                   <div
                     className="absolute -top-3 right-6 w-9 h-9 rounded-full bg-ink text-cream flex items-center justify-center font-bold text-sm"
@@ -540,7 +546,7 @@ export default async function Home() {
                 },
                 {
                   q: "התמונות שלי נשמרות בשרת שלכם?",
-                  a: "לא. הסרת הרקע והעיבוד קורים 100% במחשב שלך. שום תמונה לא יוצאת מהדפדפן שלך אל השרת שלנו.",
+                  a: "לא. הסרת הרקע והעיבוד קורים 100% על המכשיר שלך — בטלפון, בטאבלט או במחשב. שום תמונה לא יוצאת מהדפדפן שלך אל השרת שלנו.",
                 },
                 {
                   q: "איך המדבקה נוספת לוואטסאפ?",
