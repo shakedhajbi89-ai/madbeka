@@ -13,7 +13,9 @@ import {
 } from "lucide-react";
 import { db, users, stickerEvents } from "@/lib/db";
 import { ensureCurrentUser } from "@/lib/user-service";
-import { TopBar } from "@/components/playful/TopBar";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { UserButton } from "@clerk/nextjs";
 import { PUBLIC_DOMAIN } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -72,20 +74,13 @@ export default async function AccountPage() {
   const recentEvents = events.slice(0, 5);
 
   return (
-    <main
-      dir="rtl"
+    <div
       className="relative min-h-screen text-ink"
-      style={{
-        background: "var(--cream)",
-        backgroundImage: `
-          radial-gradient(circle at 20% 18%, rgba(37,211,102,0.18), transparent 60%),
-          radial-gradient(circle at 88% 82%, rgba(255,110,181,0.12), transparent 65%)
-        `,
-        fontFamily: "'Assistant', system-ui, sans-serif",
-      }}
+      style={{ background: "var(--cream)" }}
     >
+      <Header variant="minimal" authControls={<UserButton />} />
+      <main dir="rtl">
       <div className="relative z-10 mx-auto max-w-5xl px-6 py-6 lg:px-8">
-        <TopBar active="account" />
 
         {/* Greeting */}
         <div className="mb-7 flex flex-col-reverse items-start justify-between gap-4 sm:flex-row sm:items-end">
@@ -519,6 +514,8 @@ export default async function AccountPage() {
           </span>
         </div>
       </div>
-    </main>
+      </main>
+      <Footer variant="minimal" />
+    </div>
   );
 }

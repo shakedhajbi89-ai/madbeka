@@ -13,7 +13,9 @@ import {
   downloadBlob,
   shareStickerToWhatsApp,
 } from "@/lib/sticker-utils";
-import { TopBar } from "@/components/playful/TopBar";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { UserButton } from "@clerk/nextjs";
 import { PUBLIC_DOMAIN } from "@/lib/brand";
 
 interface GalleryItemUI extends GalleryEntry {
@@ -96,20 +98,13 @@ export default function GalleryPage() {
   }, []);
 
   return (
-    <main
-      dir="rtl"
+    <div
       className="relative min-h-screen text-ink"
-      style={{
-        background: "var(--cream)",
-        backgroundImage: `
-          radial-gradient(circle at 18% 18%, rgba(255,110,181,0.14), transparent 60%),
-          radial-gradient(circle at 88% 82%, rgba(37,211,102,0.16), transparent 65%)
-        `,
-        fontFamily: "'Assistant', system-ui, sans-serif",
-      }}
+      style={{ background: "var(--cream)" }}
     >
+      <Header variant="minimal" authControls={isLoaded && isSignedIn ? <UserButton /> : undefined} />
+      <main dir="rtl">
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-6 lg:px-8">
-        <TopBar active="gallery" signedIn={isLoaded && !!isSignedIn} />
 
         {/* Header */}
         <div className="mb-7 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
@@ -394,16 +389,9 @@ export default function GalleryPage() {
           </div>
         )}
 
-        <footer
-          className="mt-10 pt-6 text-center text-xs font-bold"
-          style={{
-            color: "#5a4252",
-            borderTop: "1.5px dashed var(--ink)",
-          }}
-        >
-          {PUBLIC_DOMAIN} · הגלריה נשמרת במכשיר שלך בלבד
-        </footer>
       </div>
-    </main>
+      </main>
+      <Footer variant="minimal" />
+    </div>
   );
 }

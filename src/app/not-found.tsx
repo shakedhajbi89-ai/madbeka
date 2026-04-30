@@ -1,20 +1,25 @@
 import Link from "next/link";
-import { Home, Sticker as StickerIcon, Wand2 } from "lucide-react";
+import { Home, Wand2 } from "lucide-react";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 
 export default function NotFound() {
   return (
-    <main
-      dir="rtl"
-      className="relative grid min-h-screen place-items-center text-ink"
-      style={{
-        background: "var(--cream)",
-        backgroundImage: `
-          radial-gradient(circle at 20% 22%, rgba(255,110,181,0.18), transparent 60%),
-          radial-gradient(circle at 80% 78%, rgba(37,211,102,0.18), transparent 60%)
-        `,
-        fontFamily: "'Assistant', system-ui, sans-serif",
-      }}
+    <div
+      className="relative min-h-screen text-ink"
+      style={{ background: "var(--cream)" }}
     >
+      <Header variant="minimal" />
+      <main
+        dir="rtl"
+        className="grid place-items-center py-16"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at 20% 22%, rgba(255,110,181,0.18), transparent 60%),
+            radial-gradient(circle at 80% 78%, rgba(37,211,102,0.18), transparent 60%)
+          `,
+        }}
+      >
       <div className="relative px-6 text-center">
         {/* Decorative emoji scatter */}
         {[
@@ -135,14 +140,9 @@ export default function NotFound() {
           </Link>
         </div>
 
-        <Link
-          href="/"
-          className="mt-10 inline-flex items-center gap-2 text-xs font-extrabold opacity-50"
-        >
-          <StickerIcon size={14} />
-          Madbeka
-        </Link>
       </div>
-    </main>
+      </main>
+      <Footer variant="minimal" />
+    </div>
   );
 }

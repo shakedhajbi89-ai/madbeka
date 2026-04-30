@@ -5,64 +5,149 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* ============================================================
+     MADBEKA DESIGN SYSTEM — v1.0 (Stage 1 Foundation)
+     Legacy tokens preserved for backward compat (--ink, --wa, etc.)
+     New HSL tokens added from design handoff 2026-04-30.
+     ============================================================ */
+
+  /* ── Legacy tokens (still used in existing codebase) ── */
   --brand-green: #25D366;
   --brand-green-dark: #128C7E;
+  --ink: #0F0E0C;
+  --cream: #FFF8EC;
+  --paper: #FBF3DD;
+  --wa: #25D366;
+  --wa-dark: #0E7A3E;
+  --tape-yellow: #F4C430;
+  --accent-pink: #FF6EB5;
+  --accent-blue: #5DC0FF;
+  --accent-purple: #8B7AE0;
+  --accent-red: #E84C2B;
+  --accent-amber: #F19130;
 
-  /* === Playful Sticker Shop tokens (Claude Design handoff 2026-04-28) ===
-     Defining brand identity: chunky ink borders + sharp offset shadows
-     against a warm cream background. WhatsApp green is the primary CTA
-     accent only — every other surface uses ink/cream/paper. */
-  --ink: #0F0E0C;          /* primary text, all borders, all hard shadows */
-  --cream: #FFF8EC;        /* page background */
-  --paper: #FBF3DD;        /* secondary surface (footers, tabs, TL;DR cards) */
-  --wa: #25D366;           /* WhatsApp green — primary accent, CTAs */
-  --wa-dark: #0E7A3E;      /* darker green — text on cream, link color */
-  --tape-yellow: #F4C430;  /* sticker tape strip + warning toast */
-  --accent-pink: #FF6EB5;  /* decorative radials, sample stickers */
-  --accent-blue: #5DC0FF;  /* info toast */
-  --accent-purple: #8B7AE0;/* sample sticker color */
-  --accent-red: #E84C2B;   /* error toast, destructive */
-  --accent-amber: #F19130; /* sample sticker color */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* ── New design system HSL tokens ── */
+
+  /* Surfaces */
+  --background:       47 76% 92%;   /* #FBF3DC cream */
+  --bg-elevated:      50 100% 98%;
+  --foreground:       0 0% 5%;      /* #0E0E0E */
+
+  --card:             0 0% 100%;
+  --card-foreground:  0 0% 5%;
+  --card-dark:        0 0% 5%;
+
+  --popover:          0 0% 100%;
+  --popover-foreground: 0 0% 5%;
+
+  /* Brand */
+  --primary:          142 71% 45%;   /* #22C55E brand green */
+  --primary-foreground: 0 0% 100%;
+  --primary-deep:     142 76% 36%;   /* hover/pressed */
+  --primary-soft:     141 84% 93%;   /* badge bg */
+
+  /* Sticker palette */
+  --sticker-pink:     330 81% 60%;
+  --sticker-magenta:  292 84% 61%;
+  --sticker-yellow:   48 96% 53%;
+  --sticker-orange:   21 90% 48%;
+  --sticker-red:      0 84% 60%;
+  --sticker-blue:     217 91% 60%;
+  --sticker-cyan:     189 94% 43%;
+  --sticker-lime:     84 81% 44%;
+
+  /* Tape */
+  --tape:             48 96% 53%;
+
+  /* Semantic */
+  --secondary:        47 40% 88%;
+  --secondary-foreground: 0 0% 5%;
+
+  --muted:            47 30% 90%;
+  --muted-foreground: 0 0% 40%;
+
+  --accent:           142 71% 45%;
+  --accent-foreground: 0 0% 100%;
+
+  --success:          142 71% 45%;
+  --success-bg:       141 84% 93%;
+  --destructive:      0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --destructive-bg:   0 86% 94%;
+  --info:             217 91% 60%;
+  --info-bg:          214 95% 93%;
+  --warning:          38 92% 50%;
+  --warning-bg:       48 96% 89%;
+
+  /* Lines */
+  --border:           0 0% 5%;
+  --border-soft:      47 20% 82%;
+  --border-dashed:    47 10% 65%;
+  --input:            0 0% 5%;
+  --ring:             142 71% 45%;
+
+  /* Checker pattern */
+  --checker-a:        47 40% 90%;
+  --checker-b:        47 25% 80%;
+
+  /* Radii */
+  --radius: 1rem;
+  --radius-chip: 12px;
+  --radius-card: 18px;
+  --radius-card-lg: 22px;
+  --radius-modal: 26px;
+  --radius-splash: 32px;
+
+  /* Shadows — brutal offset */
+  --shadow-brutal-sm: 4px 4px 0 0 var(--ink);
+  --shadow-brutal-md: 6px 6px 0 0 var(--ink);
+  --shadow-brutal-lg: 10px 10px 0 0 var(--ink);
+  --shadow-brutal-xl: 14px 14px 0 0 var(--ink);
+  /* Legacy hard shadows (backward compat) */
+  --shadow-hard-2: 2px 3px 0 var(--ink);
+  --shadow-hard-3: 3px 4px 0 var(--ink);
+  --shadow-hard-4: 4px 5px 0 var(--ink);
+  --shadow-hard-5: 5px 6px 0 var(--ink);
+  --shadow-hard-6: 6px 7px 0 var(--ink);
+  --shadow-hard-8: 8px 9px 0 var(--ink);
+  --shadow-hard-10: 10px 11px 0 var(--ink);
+  --shadow-modal: 0 24px 0 var(--ink), 0 0 0 8px rgba(15, 14, 12, 0.08);
+
+  /* Fonts */
+  --font-display: 'Heebo', system-ui, sans-serif;
+  --font-body:    'Heebo', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* Motion */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Sidebar (shadcn compat) */
+  --sidebar:          47 76% 97%;
+  --sidebar-foreground: 0 0% 5%;
+  --sidebar-primary:  142 71% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent:   47 30% 90%;
+  --sidebar-accent-foreground: 0 0% 5%;
+  --sidebar-border:   47 20% 82%;
+  --sidebar-ring:     142 71% 45%;
+
+  /* Chart colors */
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* ── Core color tokens → Tailwind utilities ── */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  /* Legacy aliases — keep existing bg-ink, text-cream, bg-wa, etc. working */
   --color-brand: var(--brand-green);
   --color-brand-dark: var(--brand-green-dark);
-  /* New Playful tokens — exposed as Tailwind utilities (bg-ink, text-cream, etc) */
   --color-ink: var(--ink);
   --color-cream: var(--cream);
   --color-paper: var(--paper);
@@ -74,64 +159,257 @@
   --color-accent-purple: var(--accent-purple);
   --color-accent-red: var(--accent-red);
   --color-accent-amber: var(--accent-amber);
-  /* Hard-offset shadow utility — the signature of the design.
-     Y-offset is X+1 (subtle weight). Active state uses translate + half. */
-  --shadow-hard-2: 2px 3px 0 var(--ink);
-  --shadow-hard-3: 3px 4px 0 var(--ink);
-  --shadow-hard-4: 4px 5px 0 var(--ink);
-  --shadow-hard-5: 5px 6px 0 var(--ink);
-  --shadow-hard-6: 6px 7px 0 var(--ink);
-  --shadow-hard-8: 8px 9px 0 var(--ink);
-  --shadow-hard-10: 10px 11px 0 var(--ink);
-  --shadow-modal: 0 24px 0 var(--ink), 0 0 0 8px rgba(15, 14, 12, 0.08);
-  /* Custom radii used by the design */
-  --radius-chip: 12px;
-  --radius-card: 18px;
-  --radius-card-lg: 22px;
-  --radius-modal: 26px;
-  --radius-splash: 32px;
-  --font-sans: var(--font-sans);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
+
+  /* New design tokens */
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-dark: hsl(var(--card-dark));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-deep: hsl(var(--primary-deep));
+  --color-primary-soft: hsl(var(--primary-soft));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-bg: hsl(var(--destructive-bg));
+  --color-success: hsl(var(--success));
+  --color-success-bg: hsl(var(--success-bg));
+  --color-info: hsl(var(--info));
+  --color-info-bg: hsl(var(--info-bg));
+  --color-warning: hsl(var(--warning));
+  --color-warning-bg: hsl(var(--warning-bg));
+  --color-border: hsl(var(--border));
+  --color-border-soft: hsl(var(--border-soft));
+  --color-border-dashed: hsl(var(--border-dashed));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-bg-elevated: hsl(var(--bg-elevated));
+  --color-tape: hsl(var(--tape));
+  --color-sticker-pink: hsl(var(--sticker-pink));
+  --color-sticker-magenta: hsl(var(--sticker-magenta));
+  --color-sticker-yellow: hsl(var(--sticker-yellow));
+  --color-sticker-orange: hsl(var(--sticker-orange));
+  --color-sticker-red: hsl(var(--sticker-red));
+  --color-sticker-blue: hsl(var(--sticker-blue));
+  --color-sticker-cyan: hsl(var(--sticker-cyan));
+  --color-sticker-lime: hsl(var(--sticker-lime));
+
+  /* Sidebar */
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  /* Charts */
   --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Radii */
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  calc(var(--radius) * 0.8);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Fonts */
+  --font-sans:    var(--font-heebo), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-heebo), system-ui, sans-serif;
+  --font-display: var(--font-heebo), system-ui, sans-serif;
+  --font-mono:    var(--font-mono), monospace;
+
+  /* Shadows */
+  --shadow-brutal-sm: var(--shadow-brutal-sm);
+  --shadow-brutal-md: var(--shadow-brutal-md);
+  --shadow-brutal-lg: var(--shadow-brutal-lg);
+  --shadow-brutal-xl: var(--shadow-brutal-xl);
 }
 
 body {
   font-family: var(--font-heebo), system-ui, -apple-system, sans-serif;
+}
+
+/* ============================================================
+   BRUTAL CARD UTILITIES
+   ============================================================ */
+.brutal-card {
+  border: 2.5px solid var(--ink);
+  box-shadow: var(--shadow-brutal-md);
+  background: hsl(var(--card));
+  border-radius: var(--radius);
+  transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+}
+
+.brutal-card-hover:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-brutal-lg);
+}
+
+.brutal-sm { box-shadow: var(--shadow-brutal-sm); }
+.brutal-md { box-shadow: var(--shadow-brutal-md); }
+.brutal-lg { box-shadow: var(--shadow-brutal-lg); }
+.brutal-xl { box-shadow: var(--shadow-brutal-xl); }
+
+/* ============================================================
+   CHECKER BACKGROUND (sticker canvas pattern)
+   ============================================================ */
+.checker-bg {
+  background-image:
+    linear-gradient(45deg, hsl(var(--checker-b)) 25%, transparent 25%),
+    linear-gradient(-45deg, hsl(var(--checker-b)) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, hsl(var(--checker-b)) 75%),
+    linear-gradient(-45deg, transparent 75%, hsl(var(--checker-b)) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-color: hsl(var(--checker-a));
+}
+
+/* ============================================================
+   GLOW BACKGROUND (landing, auth, 404, account, splash)
+   ============================================================ */
+.glow-bg {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.glow-bg::before,
+.glow-bg::after {
+  content: '';
+  position: absolute;
+  inset: auto;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: .55;
+  z-index: -1;
+  pointer-events: none;
+}
+.glow-bg::before {
+  top: -20vmax; right: -20vmax;
+  background: radial-gradient(closest-side, hsl(var(--primary) / .4), transparent 70%);
+}
+.glow-bg::after {
+  bottom: -20vmax; left: -20vmax;
+  background: radial-gradient(closest-side, hsl(var(--sticker-pink) / .3), transparent 70%);
+}
+
+/* ============================================================
+   STICKER WORD — outlined display text (used in hero decorations)
+   ============================================================ */
+.sticker-word {
+  font-family: var(--font-heebo), system-ui, sans-serif;
+  font-weight: 900;
+  color: white;
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 3px 3px 0 var(--ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================
+   PROGRESS STRIPES (background removal loading bar)
+   ============================================================ */
+.progress-stripes {
+  background-image: repeating-linear-gradient(
+    45deg,
+    hsl(var(--primary)) 0,
+    hsl(var(--primary)) 8px,
+    hsl(var(--primary-deep)) 8px,
+    hsl(var(--primary-deep)) 16px
+  );
+  background-size: 22px 22px;
+  animation: progress-stripes-move 1s linear infinite;
+}
+
+@keyframes progress-stripes-move {
+  from { background-position: 0 0; }
+  to   { background-position: 22px 0; }
+}
+
+/* ============================================================
+   FOCUS RING
+   ============================================================ */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--primary) / .5);
+}
+
+/* ============================================================
+   UNDERLINE BRAND ("בעברית" hero highlight)
+   ============================================================ */
+.underline-brand {
+  background-image: linear-gradient(transparent 65%, hsl(var(--primary)) 65%, hsl(var(--primary)) 92%, transparent 92%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+/* ============================================================
+   CONFETTI
+   ============================================================ */
+@keyframes confetti-fall {
+  0%   { transform: translate(0,0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--cx, 0), var(--cy, 120px)) rotate(540deg); opacity: 0; }
+}
+.confetti-piece {
+  position: absolute;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confetti-fall 1400ms var(--ease-out) forwards;
+}
+
+/* ============================================================
+   FLOAT TILE (decorative sticker tiles in hero)
+   ============================================================ */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+  50%       { transform: translateY(-8px) rotate(var(--r, 0deg)); }
+}
+.float-tile { animation: float-y 5s ease-in-out infinite; }
+
+/* ============================================================
+   SLIDE / SCALE ANIMATIONS
+   ============================================================ */
+@keyframes slide-down {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+.anim-slide-down { animation: slide-down 220ms var(--ease-out); }
+
+@keyframes scale-in {
+  from { transform: scale(.96); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.anim-scale-in { animation: scale-in 220ms var(--ease-spring); }
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .float-tile,
+  .progress-stripes,
+  .confetti-piece,
+  .anim-slide-down,
+  .anim-scale-in {
+    animation: none;
+  }
 }
 
 /* Photoshop-style transparency checker — legacy .checkerboard for the
@@ -208,37 +486,32 @@ body {
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background:        0 0% 4%;
+  --bg-elevated:       0 0% 8%;
+  --foreground:        47 76% 92%;
+  --card:              0 0% 10%;
+  --card-foreground:   47 76% 92%;
+  --popover:           0 0% 10%;
+  --popover-foreground: 47 76% 92%;
+  --muted:             0 0% 15%;
+  --muted-foreground:  0 0% 65%;
+  --secondary:         0 0% 12%;
+  --secondary-foreground: 47 76% 92%;
+  --border:            47 76% 92%;
+  --border-soft:       0 0% 20%;
+  --primary:           142 71% 45%;
+  --primary-foreground: 0 0% 100%;
+  --shadow-brutal-sm: 4px 4px 0 0 hsl(47 76% 92%);
+  --shadow-brutal-md: 6px 6px 0 0 hsl(47 76% 92%);
+  --shadow-brutal-lg: 10px 10px 0 0 hsl(47 76% 92%);
+  --sidebar:           0 0% 8%;
+  --sidebar-foreground: 47 76% 92%;
+  --sidebar-primary:   142 71% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent:    0 0% 12%;
+  --sidebar-accent-foreground: 47 76% 92%;
+  --sidebar-border:    0 0% 20%;
+  --sidebar-ring:      142 71% 45%;
 }
 
 @layer base {

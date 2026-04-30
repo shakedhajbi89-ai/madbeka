@@ -9,12 +9,13 @@ import {
   ImageIcon,
   Send,
   Sparkles,
-  Sticker as StickerIcon,
   Wand2,
 } from "lucide-react";
 import { StickerMaker } from "@/components/sticker-maker";
 import { StickerCounter } from "@/components/sticker-counter";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { BrutalButton } from "@/components/BrutalButton";
 import { PUBLIC_DOMAIN } from "@/lib/brand";
 
 /* ─────────────────────────────────────────────────────────────
@@ -131,21 +132,22 @@ export default async function Home() {
   const { userId } = await auth();
   const isSignedIn = Boolean(userId);
 
+  const authControls = isSignedIn ? (
+    <UserButton />
+  ) : (
+    <SignInButton mode="modal">
+      <button className="text-sm font-extrabold text-[var(--ink)]">התחברות</button>
+    </SignInButton>
+  );
+
   return (
-    <main
-      dir="rtl"
+    <div
       className="relative min-h-screen text-ink"
-      style={{
-        background: "var(--cream)",
-        backgroundImage: `
-          radial-gradient(circle at 18% 20%, #ffd9ec 0, transparent 22%),
-          radial-gradient(circle at 82% 18%, #c8f5dd 0, transparent 22%),
-          radial-gradient(circle at 88% 82%, #c5e6ff 0, transparent 22%),
-          radial-gradient(circle at 12% 80%, #ffe0c2 0, transparent 22%)
-        `,
-        fontFamily: "'Assistant', system-ui, sans-serif",
-      }}
+      style={{ background: "var(--cream)" }}
     >
+      {/* ── Sticky Header ── */}
+      <Header variant="full" authControls={authControls} />
+
       {/* decorative squiggles */}
       <svg
         aria-hidden
@@ -168,65 +170,8 @@ export default async function Home() {
         />
       </svg>
 
+      <main dir="rtl">
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-6 lg:px-8">
-        {/* ───────── TOP NAV ───────── */}
-        <header className="mb-12 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3.5">
-            <div
-              className="grid h-12 w-12 place-items-center rounded-[15px] text-cream"
-              style={{
-                background: "var(--ink)",
-                transform: "rotate(-6deg)",
-                boxShadow: "0 5px 0 var(--wa), 0 10px 20px rgba(0,0,0,0.18)",
-              }}
-            >
-              <StickerIcon size={24} strokeWidth={2.4} />
-            </div>
-            <div
-              className="text-3xl leading-none"
-              style={{
-                fontFamily: "'Karantina', 'Heebo', sans-serif",
-                fontWeight: 700,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Madbeka
-            </div>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            {isSignedIn ? (
-              <>
-                <Link
-                  href="/account"
-                  className="hidden text-sm font-extrabold sm:inline"
-                >
-                  החשבון שלי
-                </Link>
-                <UserButton />
-              </>
-            ) : (
-              <SignInButton mode="modal">
-                <button className="text-sm font-extrabold">התחברות</button>
-              </SignInButton>
-            )}
-            <Link
-              href="/templates"
-              className="press-active inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-extrabold"
-              style={{
-                background: "var(--wa)",
-                color: "#fff",
-                border: "3px solid var(--ink)",
-                borderRadius: 16,
-                boxShadow: "4px 5px 0 var(--ink)",
-              }}
-            >
-              <Wand2 size={15} />
-              התחל ליצור
-            </Link>
-          </div>
-        </header>
 
         {/* ───────── HERO ───────── */}
         <section className="relative pb-16 pt-6 text-center">
@@ -304,21 +249,10 @@ export default async function Home() {
             </p>
 
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/templates"
-                className="press-active inline-flex items-center gap-2 px-6 py-4 text-lg font-extrabold"
-                style={{
-                  background: "var(--wa)",
-                  color: "#fff",
-                  border: "3px solid var(--ink)",
-                  borderRadius: 18,
-                  boxShadow: "5px 6px 0 var(--ink)",
-                  fontFamily: "'Karantina', 'Heebo', sans-serif",
-                  fontSize: 24,
-                }}
-              >
-                <Wand2 size={20} />
-                התחל ליצור — חינם
+              <Link href="/templates">
+                <BrutalButton variant="primary" size="lg" iconLeft={<Wand2 size={20} />}>
+                  התחל ליצור — חינם
+                </BrutalButton>
               </Link>
               <a
                 href="#how"
@@ -641,20 +575,10 @@ export default async function Home() {
                 ))}
               </ul>
 
-              <Link
-                href="/templates?upgrade=1"
-                className="press-active mt-7 flex w-full items-center justify-center gap-2 px-5 py-4 text-lg font-extrabold"
-                style={{
-                  background: "var(--wa)",
-                  color: "#fff",
-                  border: "2.5px solid var(--ink)",
-                  borderRadius: 16,
-                  boxShadow: "5px 6px 0 var(--ink)",
-                  fontFamily: "'Karantina', 'Heebo', sans-serif",
-                  fontSize: 22,
-                }}
-              >
-                התחל ליצור ללא הגבלה
+              <Link href="/templates?upgrade=1" className="mt-7 block">
+                <BrutalButton variant="primary" size="lg" fullWidth>
+                  התחל ליצור ללא הגבלה
+                </BrutalButton>
               </Link>
               <p
                 className="mt-3 text-center text-xs font-bold"
@@ -730,100 +654,9 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* ───────── FOOTER ───────── */}
-        <footer
-          className="mt-12 pt-8 pb-6"
-          style={{
-            borderTop: "2px dashed var(--ink)",
-          }}
-        >
-          <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
-            <div className="text-center md:text-right">
-              <div className="flex items-center justify-center gap-3 md:justify-start">
-                <div
-                  className="grid h-10 w-10 place-items-center rounded-[12px]"
-                  style={{
-                    background: "var(--ink)",
-                    color: "var(--cream)",
-                    transform: "rotate(-6deg)",
-                    boxShadow: "3px 4px 0 var(--wa)",
-                  }}
-                >
-                  <StickerIcon size={20} strokeWidth={2.4} />
-                </div>
-                <div
-                  className="text-2xl"
-                  style={{
-                    fontFamily: "'Karantina', 'Heebo', sans-serif",
-                    fontWeight: 700,
-                    letterSpacing: "-0.02em",
-                  }}
-                >
-                  Madbeka
-                </div>
-              </div>
-              <p
-                className="mt-2 text-sm font-bold"
-                style={{ color: "#5a4252" }}
-              >
-                {PUBLIC_DOMAIN} · 3 מדבקות חינם · ₪29 לגישה מלאה
-              </p>
-            </div>
-
-            <nav
-              className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm font-extrabold"
-              aria-label="קישורים"
-            >
-              <Link
-                href="/templates"
-                style={{ color: "var(--ink)" }}
-                className="hover:underline"
-              >
-                עורך
-              </Link>
-              {isSignedIn && (
-                <>
-                  <Link
-                    href="/gallery"
-                    style={{ color: "var(--ink)" }}
-                    className="hover:underline"
-                  >
-                    גלריה
-                  </Link>
-                  <Link
-                    href="/account"
-                    style={{ color: "var(--ink)" }}
-                    className="hover:underline"
-                  >
-                    חשבון
-                  </Link>
-                </>
-              )}
-              <Link
-                href="/terms"
-                style={{ color: "var(--ink)", opacity: 0.7 }}
-                className="hover:underline"
-              >
-                תנאי שימוש
-              </Link>
-              <Link
-                href="/privacy"
-                style={{ color: "var(--ink)", opacity: 0.7 }}
-                className="hover:underline"
-              >
-                פרטיות
-              </Link>
-              <Link
-                href="/refund"
-                style={{ color: "var(--ink)", opacity: 0.7 }}
-                className="hover:underline"
-              >
-                החזרים
-              </Link>
-            </nav>
-          </div>
-        </footer>
       </div>
-    </main>
+      </main>
+      <Footer variant="full" />
+    </div>
   );
 }

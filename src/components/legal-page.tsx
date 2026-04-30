@@ -1,6 +1,7 @@
-import Link from "next/link";
-import { Clock, Sticker as StickerIcon } from "lucide-react";
+import { Clock } from "lucide-react";
 import type { ReactNode } from "react";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 
 /**
  * Shared shell for the 3 legal pages (/terms, /privacy, /refund).
@@ -27,47 +28,13 @@ export function LegalPage({
   children: ReactNode;
 }) {
   return (
-    <main
-      dir="rtl"
+    <div
       className="relative min-h-screen text-ink"
-      style={{
-        background: "var(--cream)",
-        fontFamily: "'Assistant', system-ui, sans-serif",
-      }}
+      style={{ background: "var(--cream)" }}
     >
+      <Header variant="minimal" />
+      <main dir="rtl">
       <div className="mx-auto max-w-3xl px-6 py-6 lg:px-8">
-        {/* Header */}
-        <header className="mb-10 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <div
-              className="grid h-11 w-11 place-items-center rounded-[14px] text-cream"
-              style={{
-                background: "var(--ink)",
-                transform: "rotate(-6deg)",
-                boxShadow: "0 4px 0 var(--wa)",
-              }}
-            >
-              <StickerIcon size={22} strokeWidth={2.4} />
-            </div>
-            <div
-              className="text-2xl leading-none"
-              style={{
-                fontFamily: "'Karantina', 'Heebo', sans-serif",
-                fontWeight: 700,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Madbeka
-            </div>
-          </Link>
-          <Link
-            href="/"
-            className="text-sm font-extrabold"
-            style={{ color: "var(--ink)" }}
-          >
-            ← חזרה לדף הבית
-          </Link>
-        </header>
 
         {/* Doc heading */}
         <div className="mb-8">
@@ -161,39 +128,9 @@ export function LegalPage({
           </div>
         </article>
 
-        {/* Footer */}
-        <footer
-          className="mt-10 flex flex-wrap items-center gap-4 pt-6 text-[13px] font-extrabold"
-          style={{
-            borderTop: "1.5px dashed var(--ink)",
-          }}
-        >
-          <Link
-            href="/privacy"
-            style={{ color: "var(--ink)", opacity: 0.7 }}
-            className="hover:underline"
-          >
-            פרטיות
-          </Link>
-          <Link
-            href="/terms"
-            style={{ color: "var(--ink)", opacity: 0.7 }}
-            className="hover:underline"
-          >
-            תקנון
-          </Link>
-          <Link
-            href="/refund"
-            style={{ color: "var(--ink)", opacity: 0.7 }}
-            className="hover:underline"
-          >
-            החזרים
-          </Link>
-          <span className="ms-auto" style={{ opacity: 0.5 }}>
-            © 2026 Madbeka
-          </span>
-        </footer>
       </div>
-    </main>
+      </main>
+      <Footer variant="minimal" />
+    </div>
   );
 }
