@@ -217,6 +217,7 @@ export default function TemplatesPage() {
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const [imageTick, setImageTick] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // Keep selectedId valid.
   useEffect(() => {
@@ -261,6 +262,7 @@ export default function TemplatesPage() {
   }, [zoomed]);
 
   // Detect ?paid=1 from Lemon Squeezy success_url redirect.
+  // Detect ?upgrade=1 from /account upgrade button → open paywall immediately.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("paid") === "1") {
@@ -273,6 +275,9 @@ export default function TemplatesPage() {
           }
         }).catch(() => {});
       }
+    }
+    if (params.get("upgrade") === "1") {
+      setShowPaywall(true);
     }
   }, [isSignedIn]);
 
@@ -363,6 +368,10 @@ export default function TemplatesPage() {
   // ---------- Image input ----------
   const openImagePicker = useCallback(() => {
     fileInputRef.current?.click();
+  }, []);
+
+  const openCameraPicker = useCallback(() => {
+    cameraInputRef.current?.click();
   }, []);
 
   const ingestImageFile = useCallback(async (file: File) => {
@@ -804,6 +813,10 @@ export default function TemplatesPage() {
         overflowX: "clip",
       }}
     >
+      {/* Hidden file inputs — rendered ONCE here, not duplicated in mobile/desktop branches */}
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageFile} className="hidden" />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageFile} className="hidden" />
+
       {/* Unified sticky header */}
       <Header variant="minimal" />
 
@@ -1084,7 +1097,7 @@ export default function TemplatesPage() {
           <ActionChip
             icon={<Camera size={14} />}
             label="צלם"
-            onClick={openImagePicker}
+            onClick={openCameraPicker}
           />
           <ActionChip
             icon={<ImageIcon size={14} />}
@@ -1522,7 +1535,7 @@ export default function TemplatesPage() {
               )}
               <ChipsRow>
                 <ActionChip icon={<ImageIcon size={13} />} label="העלאה" onClick={openImagePicker} />
-                <ActionChip icon={<Camera size={13} />} label="צלם" onClick={openImagePicker} />
+                <ActionChip icon={<Camera size={13} />} label="צלם" onClick={openCameraPicker} />
               </ChipsRow>
               <ChipsRow>
                 <ActionChip icon={<Smile size={13} />} label="אימוג׳י" onClick={() => {
@@ -1537,7 +1550,6 @@ export default function TemplatesPage() {
                   onClick={removeBackgroundFromSelected}
                 />
               </ChipsRow>
-              <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageFile} className="hidden" />
             </div>
 
             {/* PRESETS RAIL */}
@@ -1803,7 +1815,6 @@ export default function TemplatesPage() {
               )}
             </Section>
 
-            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleImageFile} className="hidden" />
           </aside>
         </div>
 
@@ -1849,7 +1860,11 @@ export default function TemplatesPage() {
           kind={postActionModal.kind}
           missing={postActionModal.kind === "needs-more" ? postActionModal.missing : undefined}
           onClose={() => setPostActionModal(null)}
-          onDownload={() => { setPostActionModal(null); void onDownload(); }}
+          onDownload={
+            postActionModal.kind === "downloaded"
+              ? () => setPostActionModal(null)
+              : () => { setPostActionModal(null); void onDownload(); }
+          }
         />
       )}
 

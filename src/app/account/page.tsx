@@ -3,20 +3,21 @@ import { redirect } from "next/navigation";
 import { eq, desc } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import {
+  Download,
   ImageIcon,
-  LogOut,
   Mail,
   ShieldCheck,
   Sticker as StickerIcon,
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { db, users, stickerEvents } from "@/lib/db";
+import { db, stickerEvents } from "@/lib/db";
 import { ensureCurrentUser } from "@/lib/user-service";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { UserButton } from "@clerk/nextjs";
 import { PUBLIC_DOMAIN } from "@/lib/brand";
+import { SignOutButton } from "@/components/SignOutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -106,19 +107,7 @@ export default async function AccountPage() {
               {userRow.email} · חבר מאז {formatDate(userRow.createdAt)}
             </p>
           </div>
-          <Link
-            href="/api/auth/sign-out"
-            className="press-active inline-flex items-center gap-1.5 px-4 py-2 text-sm font-extrabold"
-            style={{
-              background: "transparent",
-              color: "var(--ink)",
-              border: "2px solid var(--ink)",
-              borderRadius: 12,
-            }}
-          >
-            <LogOut size={14} />
-            התנתק
-          </Link>
+          <SignOutButton />
         </div>
 
         {/* Top row — status card + stat tile */}
@@ -196,7 +185,7 @@ export default async function AccountPage() {
 
             {!hasPaid && !isRefunded && (
               <Link
-                href="/?upgrade=1"
+                href="/templates?upgrade=1"
                 className="press-active inline-flex items-center gap-2 px-5 py-3 text-base font-extrabold"
                 style={{
                   background: "var(--wa)",
@@ -421,14 +410,11 @@ export default async function AccountPage() {
                     background: "var(--cream)",
                     border: "1.5px solid var(--ink)",
                     borderRadius: 10,
-                    fontFamily: "'Karantina', 'Heebo', sans-serif",
-                    fontWeight: 700,
-                    fontSize: 16,
                     color: "var(--wa-dark)",
                     transform: "rotate(-3deg)",
                   }}
                 >
-                  ✓
+                  <Download size={18} strokeWidth={2.2} />
                 </div>
                 <div
                   className="font-extrabold"
@@ -437,7 +423,7 @@ export default async function AccountPage() {
                     fontSize: 22,
                   }}
                 >
-                  מדבקה
+                  הורדה
                 </div>
                 <div
                   style={{

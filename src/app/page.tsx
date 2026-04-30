@@ -18,6 +18,7 @@ import { Footer } from "@/components/Footer";
 import { BrutalButton } from "@/components/BrutalButton";
 import { StickerTile } from "@/components/StickerTile";
 import { Eyebrow, YellowTape } from "@/components/Decorative";
+import { StickerCounter } from "@/components/sticker-counter";
 
 export default async function Home() {
   const { userId } = await auth();
@@ -300,22 +301,11 @@ export default async function Home() {
                 </div>
                 <p className="text-sm font-bold">הצטרפו לקהילה</p>
               </div>
-              {/* Right (RTL: visual right) — big counter */}
+              {/* Right (RTL: visual right) — live counter */}
               <div className="flex items-center gap-4 order-1 md:order-2">
                 <div className="text-end">
-                  <div
-                    className="flex items-center gap-2"
-                    style={{
-                      fontFamily: "'Karantina', 'Heebo', sans-serif",
-                      fontWeight: 700,
-                      fontSize: "clamp(36px, 6vw, 56px)",
-                      lineHeight: 1,
-                      color: "var(--ink)",
-                    }}
-                  >
-                    48,754
-                  </div>
-                  <p className="text-xs" style={{ color: "var(--ink)", opacity: 0.6 }}>
+                  <StickerCounter />
+                  <p className="text-xs mt-1" style={{ color: "var(--ink)", opacity: 0.6 }}>
                     מדבקות נוצרו עד היום
                   </p>
                 </div>

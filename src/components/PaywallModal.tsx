@@ -181,7 +181,7 @@ export function PaywallModal({ onClose }: PaywallModalProps) {
           marginTop: 10,
         }}
       >
-        🔒 נשלם דרך Stripe · מאובטח · ללא שאלות
+        🔒 נשלם דרך Lemon Squeezy · מאובטח · ללא שאלות
       </p>
     </Modal>
   );

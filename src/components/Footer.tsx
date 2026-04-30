@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { SUPPORT_EMAIL } from "@/lib/brand";
 
 interface FooterProps {
   /** full = dark 4-column (Landing only). minimal = single-line (all other pages). */
@@ -51,23 +52,9 @@ export function Footer({ variant = "minimal" }: FooterProps) {
                 מדבקה
               </span>
             </div>
-            <p className="mb-5 text-sm leading-relaxed opacity-70">
+            <p className="text-sm leading-relaxed opacity-70">
               עורך מדבקות הוואטסאפ הראשון שמדבר עברית כמו שצריך.
             </p>
-            {/* Social links — placeholder hrefs, no icons to avoid Lucide version conflicts */}
-            <div className="flex gap-2">
-              {["X", "Instagram", "Github"].map((name) => (
-                <a
-                  key={name}
-                  href="#"
-                  aria-label={name}
-                  className="flex h-9 w-9 items-center justify-center rounded-md border text-xs font-bold transition-colors"
-                  style={{ borderColor: "rgba(251,243,220,0.2)", color: "rgba(251,243,220,0.6)" }}
-                >
-                  {name[0]}
-                </a>
-              ))}
-            </div>
           </div>
 
           {/* Columns 2-4 — Links */}
@@ -78,13 +65,6 @@ export function Footer({ variant = "minimal" }: FooterProps) {
                 ["עורך", "/templates"],
                 ["גלריה", "/gallery"],
                 ["עזרה", "/help"],
-              ],
-            },
-            {
-              title: "חברה",
-              links: [
-                ["אודות", "#"],
-                ["יצירת קשר", "#"],
               ],
             },
             {
@@ -114,6 +94,19 @@ export function Footer({ variant = "minimal" }: FooterProps) {
               </ul>
             </div>
           ))}
+
+          {/* חברה column — needs mailto so handled separately */}
+          <div>
+            <h4 className="mb-4 font-bold" style={{ color: "var(--cream)" }}>חברה</h4>
+            <ul className="space-y-2.5 text-sm" style={{ color: "rgba(251,243,220,0.7)" }}>
+              <li>
+                <Link href="/help" className="transition-colors hover:text-primary">אודות</Link>
+              </li>
+              <li>
+                <a href={`mailto:${SUPPORT_EMAIL}`} className="transition-colors hover:text-primary">יצירת קשר</a>
+              </li>
+            </ul>
+          </div>
         </div>
 
         {/* Bottom row */}
