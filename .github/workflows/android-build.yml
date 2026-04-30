@@ -1,0 +1,121 @@
+name: Android Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+env:
+  # Gradle will use this instead of local.properties
+  ANDROID_HOME: /usr/local/lib/android/sdk
+
+jobs:
+  build:
+    name: Build APK (${{ github.event.inputs.build_type || 'debug' }})
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js 20 ──────────────────────────────────────────────────────
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 3. Java 21 ─────────────────────────────────────────────────────────
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # ── 4. Android SDK ─────────────────────────────────────────────────────
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ── 5. npm ci ──────────────────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 6. Ensure capacitor-www exists ─────────────────────────────────────
+      # The app is a remote-URL WebView — no Next.js build needed for the APK.
+      # Capacitor still requires webDir to exist at sync time, so we create
+      # a minimal redirect page that satisfies the validator.
+      - name: Create capacitor-www redirect page
+        run: |
+          mkdir -p capacitor-www
+          cat > capacitor-www/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="0;url=https://www.madbekaapp.co.il" />
+            </head>
+            <body></body>
+          </html>
+          EOF
+
+      # ── 7. Capacitor sync ──────────────────────────────────────────────────
+      - name: Capacitor sync (Android)
+        run: npx cap sync android
+
+      # ── 8. Gradle cache ────────────────────────────────────────────────────
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # ── 9. Write local.properties for CI ───────────────────────────────────
+      # Overrides the Windows path that was committed by mistake.
+      - name: Write android/local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      # ── 10. Build Debug APK ────────────────────────────────────────────────
+      - name: Build Debug APK
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # ── 11. Build Release APK (unsigned) ───────────────────────────────────
+      # Release signing is not configured yet — APK will be unsigned.
+      # When ready for Play Store: add KEYSTORE_* secrets and configure
+      # signingConfigs in android/app/build.gradle.
+      - name: Build Release APK (unsigned)
+        if: ${{ github.event.inputs.build_type == 'release' }}
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      # ── 12. Upload Debug APK ───────────────────────────────────────────────
+      - name: Upload Debug APK
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: madbeka-debug-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      # ── 13. Upload Release APK ─────────────────────────────────────────────
+      - name: Upload Release APK (unsigned)
+        if: ${{ github.event.inputs.build_type == 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: madbeka-release-unsigned-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 30
