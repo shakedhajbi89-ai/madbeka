@@ -27,6 +27,23 @@ const config: CapacitorConfig = {
     // across the WebView and the live origin without partitioning.
     androidScheme: "https",
     cleartext: false,
+    // Allow the WebView to navigate inside these hosts without launching
+    // an external browser. Required for:
+    //   - Clerk OAuth flows (accounts.clerk.dev + *.clerk.accounts.dev)
+    //   - Clerk hosted sign-in on our custom domain
+    //   - LemonSqueezy checkout overlay (app.lemonsqueezy.com)
+    // Without these entries, Capacitor's launchIntent() intercepts the
+    // navigation, opens Chrome, and the MainActivity immediately gets
+    // onPause() — causing the "App resumed → App paused" within 600ms
+    // that was observed in logcat.
+    allowNavigation: [
+      "*.madbekaapp.co.il",
+      "madbekaapp.co.il",
+      "accounts.clerk.dev",
+      "*.clerk.accounts.dev",
+      "clerk.madbekaapp.co.il",
+      "app.lemonsqueezy.com",
+    ],
   },
   android: {
     // Block back-press from accidentally exiting the app on the
