@@ -15,7 +15,7 @@
  * (not used today, but required by Chrome's TWA/WebAPK audit checklist).
  */
 
-const CACHE_NAME = "madbeka-v2";
+const CACHE_NAME = "madbeka-v3";
 
 self.addEventListener("install", () => {
   // Activate immediately on the next page load instead of waiting for all

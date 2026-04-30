@@ -932,7 +932,7 @@ export default function TemplatesPage() {
         />
       </svg>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-6 py-6 lg:px-8">
+      <main className="relative z-10 mx-auto max-w-7xl overflow-x-clip px-6 py-6 lg:px-8">
 
         {/* MAIN GRID */}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
@@ -953,8 +953,8 @@ export default function TemplatesPage() {
                   style={{
                     width: 540,
                     height: 540,
-                    maxWidth: "92vw",
-                    maxHeight: "92vw",
+                    maxWidth: "100%",
+                    maxHeight: "100vw",
                     border: "4px solid var(--ink)",
                     borderRadius: 28,
                     boxShadow: HARD_SHADOW,
